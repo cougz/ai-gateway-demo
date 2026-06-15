@@ -1,0 +1,34 @@
+{
+  "name": "ai-gateway-demo",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Workers AI binding — used for getLog / patchLog via env.AI.gateway()
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Durable Object binding for the MCP server (McpAgent requires a DO)
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AIG_DEMO_MCP",
+        "class_name": "AigDemoMcp"
+      }
+    ]
+  },
+
+  // SQLite-backed DO required by agents SDK
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["AigDemoMcp"]
+    }
+  ]
+
+  // Secrets (set via: wrangler secret put <NAME>)
+  // CF_API_TOKEN  — Cloudflare API token (AI Gateway Read/Edit + Workers AI Read)
+  // CF_ACCOUNT_ID — Your Cloudflare account ID
+  // GATEWAY_ID    — AI Gateway name (defaults to "default" if not set)
+}
