@@ -906,9 +906,9 @@ select{cursor:pointer}
     console.log('[ui] traffic gen start', count, 'requests,', delay, 'ms delay');
 
     (function run(i) {
-      if (i >= count) { log.textContent += '\u2500 Done (' + count + ' requests)\n'; return; }
+      if (i >= count) { log.textContent += '\u2500 Done (' + count + ' requests)\\n'; return; }
       var body = buildRequest('Traffic generator request ' + (i + 1) + ' of ' + count);
-      log.textContent += '[' + (i + 1) + '/' + count + '] sending\u2026\n';
+      log.textContent += '[' + (i + 1) + '/' + count + '] sending\u2026\\n';
       log.scrollTop = log.scrollHeight;
       var t0 = Date.now();
       fetch('/api/chat', {
@@ -921,12 +921,12 @@ select{cursor:pointer}
           var ms = Date.now() - t0;
           if (res.s === 200 && res.d.gateway) {
             var gw = res.d.gateway;
-            log.textContent += '  \u2713 ' + gw.cacheStatus + ' | ' + (gw.model || '?').split('/').pop() + ' | ' + ms + 'ms | ' + (gw.logId || '?').slice(0, 10) + '\u2026\n';
+            log.textContent += '  \u2713 ' + gw.cacheStatus + ' | ' + (gw.model || '?').split('/').pop() + ' | ' + ms + 'ms | ' + (gw.logId || '?').slice(0, 10) + '\u2026\\n';
           } else {
-            log.textContent += '  \u2717 ' + (res.d.message || res.s) + '\n';
+            log.textContent += '  \u2717 ' + (res.d.message || res.s) + '\\n';
           }
         })
-        .catch(function (e) { log.textContent += '  \u2717 ' + e + '\n'; })
+        .catch(function (e) { log.textContent += '  \u2717 ' + e + '\\n'; })
         .finally(function () {
           log.scrollTop = log.scrollHeight;
           if (delay > 0) {
@@ -1022,7 +1022,13 @@ select{cursor:pointer}
     console.log('[ui] init() complete');
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // DOMContentLoaded fires before a bottom-of-body <script> runs in most
+  // cases — so check readyState and fall through to init() directly.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
   console.log('[ui] script parse complete');
 
 })();
