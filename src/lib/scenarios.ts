@@ -27,8 +27,8 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "plan-router-paid",
     name: "Plan Router — Paid Tier",
-    description: "dynamic/plan-router · metadata.plan=paid → skips rate limit → Llama 3.3 70B",
-    explanation: "Same `plan-router` route, same endpoint — only `metadata.plan` changes. Paid traffic skips the rate limit node and reaches Llama 3.3 70B directly. Compare the **Model** field with the Free variant to confirm the route graph took a completely different path.",
+    description: "dynamic/plan-router · metadata.plan=paid → skips rate limit → Mistral Small 3.1 24B",
+    explanation: "Same `plan-router` route, same endpoint — only `metadata.plan` changes. Paid traffic skips the rate limit node and reaches Mistral Small 3.1 24B directly. Compare the **Model** field with the Free variant to confirm the route graph took a completely different path.",
     request: {
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
