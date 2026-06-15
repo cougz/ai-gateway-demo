@@ -122,33 +122,36 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
       ) as Response;
 
     } else {
-      // ── Dynamic routes: use AI binding gateway().run() with provider:"compat" ─
-      // This uses the pre-authenticated internal path — no explicit auth token
-      // needed, BYOK injection works correctly, and there is no outbound HTTP
-      // conflict from Worker → gateway.ai.cloudflare.com.
+      // ── Dynamic routes: fetch to gateway compat endpoint ─────────────────
+      // Uses CF_AIG_TOKEN (cfut_ runtime token) for cf-aig-authorization.
+      // The cfut_ token has "Run" permissions and is valid for this header.
+      // (cfat_ admin tokens are NOT valid here — they are management-API only.)
       const o = req.options ?? {};
+      const fetchHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(env.CF_AIG_TOKEN ? { "cf-aig-authorization": `Bearer ${env.CF_AIG_TOKEN}` } : {}),
+        ...extraHeaders,
+      };
 
-      // Build cf-aig-* headers for the binding call
-      const aigHeaders: Record<string, string> = { ...extraHeaders };
-      if (o.byokAlias)                  aigHeaders["cf-aig-byok-alias"]            = o.byokAlias;
       if (req.metadata && Object.keys(req.metadata).length)
-        aigHeaders["cf-aig-metadata"]   = JSON.stringify(req.metadata);
-      if (o.skipCache)                  aigHeaders["cf-aig-skip-cache"]             = "true";
-      if (o.cacheTtl != null)           aigHeaders["cf-aig-cache-ttl"]             = String(o.cacheTtl);
-      if (o.cacheKey)                   aigHeaders["cf-aig-cache-key"]             = o.cacheKey;
-      if (o.collectLog != null)         aigHeaders["cf-aig-collect-log"]           = String(o.collectLog);
-      if (o.collectLogPayload != null)  aigHeaders["cf-aig-collect-log-payload"]   = String(o.collectLogPayload);
-      if (o.requestTimeout != null)     aigHeaders["cf-aig-request-timeout"]       = String(o.requestTimeout);
-      if (o.maxAttempts != null)        aigHeaders["cf-aig-max-attempts"]          = String(o.maxAttempts);
-      if (o.retryDelay != null)         aigHeaders["cf-aig-retry-delay"]           = String(o.retryDelay);
-      if (o.backoff)                    aigHeaders["cf-aig-backoff"]               = o.backoff;
+        fetchHeaders["cf-aig-metadata"]             = JSON.stringify(req.metadata);
+      if (o.skipCache)                  fetchHeaders["cf-aig-skip-cache"]           = "true";
+      if (o.cacheTtl != null)           fetchHeaders["cf-aig-cache-ttl"]            = String(o.cacheTtl);
+      if (o.cacheKey)                   fetchHeaders["cf-aig-cache-key"]            = o.cacheKey;
+      if (o.collectLog != null)         fetchHeaders["cf-aig-collect-log"]          = String(o.collectLog);
+      if (o.collectLogPayload != null)  fetchHeaders["cf-aig-collect-log-payload"]  = String(o.collectLogPayload);
+      if (o.requestTimeout != null)     fetchHeaders["cf-aig-request-timeout"]      = String(o.requestTimeout);
+      if (o.maxAttempts != null)        fetchHeaders["cf-aig-max-attempts"]         = String(o.maxAttempts);
+      if (o.retryDelay != null)         fetchHeaders["cf-aig-retry-delay"]          = String(o.retryDelay);
+      if (o.backoff)                    fetchHeaders["cf-aig-backoff"]              = o.backoff;
 
-      raw = await (env.AI.gateway(gatewayId).run as Function)({
-        provider: "compat",
-        endpoint: "chat/completions",
-        headers: aigHeaders,
-        query: { model: req.model, messages: req.messages, stream: false },
-      }) as Response;
+      const compatUrl = `https://gateway.ai.cloudflare.com/v1/${env.CF_ACCOUNT_ID}/${gatewayId}/compat/chat/completions`;
+
+      raw = await fetch(compatUrl, {
+        method: "POST",
+        headers: fetchHeaders,
+        body: JSON.stringify({ model: req.model, messages: req.messages, stream: false }),
+      });
     }
   } catch (e) {
     console.error("[gateway] threw:", String(e));
