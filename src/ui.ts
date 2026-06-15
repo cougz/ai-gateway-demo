@@ -51,10 +51,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--orange)!
 .btn-sm{padding:5px 12px;font-size:12px}
 
 /* ── Layout ── */
-.layout{display:grid;grid-template-columns:252px 1fr 292px;flex:1;min-height:0;overflow:hidden}
+.layout{display:grid;grid-template-columns:252px 5px minmax(300px,1fr) 5px 292px;flex:1;min-height:0;overflow:hidden}
 .panel{display:flex;flex-direction:column;overflow:hidden}
-.panel-left{border-right:1px solid var(--border)}
-.panel-right{border-left:1px solid var(--border)}
+/* ── Resize handles ── */
+.resizer{cursor:col-resize;position:relative;z-index:20;background:transparent;flex-shrink:0}
+.resizer::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--border);transform:translateX(-50%);transition:width .12s,background .12s}
+.resizer:hover::before,.resizer.is-dragging::before{width:2px;background:var(--orange)}
+.resizer:hover{background:rgba(255,72,1,0.04)}
 .panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;border-bottom:1px solid var(--border-l);flex-shrink:0}
 .panel-title{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--subtle);font-family:var(--mono)}
 .panel-body{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -213,7 +216,7 @@ select{cursor:pointer}
 </header>
 
 <!-- Main 3-panel layout -->
-<div class="layout">
+<div class="layout" id="main-layout">
 
   <!-- LEFT: config + scenarios -->
   <div class="panel panel-left">
@@ -260,6 +263,9 @@ select{cursor:pointer}
     </div>
   </div>
 
+  <!-- Resizer: left ↔ chat -->
+  <div class="resizer" id="resizer-left" title="Drag to resize"></div>
+
   <!-- CENTER: chat -->
   <div class="panel">
     <div class="panel-head">
@@ -287,6 +293,9 @@ select{cursor:pointer}
       </button>
     </div>
   </div>
+
+  <!-- Resizer: chat ↔ right -->
+  <div class="resizer" id="resizer-right" title="Drag to resize"></div>
 
   <!-- RIGHT: gateway info -->
   <div class="panel panel-right">
@@ -577,29 +586,66 @@ select{cursor:pointer}
 
   function applyScenario(s) {
     console.log('[ui] applying scenario:', s.id);
+
+    // ── 1. Reset config fields ───────────────────────────────────────────
     if (s.request && s.request.model) { el('inp-model').value = s.request.model; }
+
+    // Reset options to defaults, then apply scenario overrides
+    el('inp-ua').value            = 'ai-gateway-demo/1.0 (cloudflare-worker)';
+    el('inp-cache-ttl').value     = '';
+    el('inp-cache-key').value     = '';
+    el('tog-skip-cache').checked  = false;
+    el('tog-collect-log').checked = true;
+    el('tog-payload').checked     = true;
+    el('inp-attempts').value      = '';
+    el('inp-retry-delay').value   = '';
+    el('sel-backoff').value       = '';
+    el('inp-timeout').value       = '';
+
     if (s.request && s.request.options) {
-      if (s.request.options.userAgent)   { el('inp-ua').value = s.request.options.userAgent; }
-      if (s.request.options.cacheTtl)    { el('inp-cache-ttl').value = s.request.options.cacheTtl; }
-      if (s.request.options.maxAttempts) { el('inp-attempts').value = s.request.options.maxAttempts; }
-      if (s.request.options.retryDelay)  { el('inp-retry-delay').value = s.request.options.retryDelay; }
-      if (s.request.options.backoff)     { el('sel-backoff').value = s.request.options.backoff; }
-      if (s.request.options.collectLogPayload === false) { el('tog-payload').checked = false; }
+      var o = s.request.options;
+      if (o.userAgent)                    { el('inp-ua').value            = o.userAgent; }
+      if (o.cacheTtl)                     { el('inp-cache-ttl').value     = o.cacheTtl; }
+      if (o.cacheKey)                     { el('inp-cache-key').value     = o.cacheKey; }
+      if (o.skipCache)                    { el('tog-skip-cache').checked  = true; }
+      if (o.collectLog === false)         { el('tog-collect-log').checked = false; }
+      if (o.collectLogPayload === false)  { el('tog-payload').checked     = false; }
+      if (o.maxAttempts)                  { el('inp-attempts').value      = o.maxAttempts; }
+      if (o.retryDelay)                   { el('inp-retry-delay').value   = o.retryDelay; }
+      if (o.backoff)                      { el('sel-backoff').value       = o.backoff; }
+      if (o.requestTimeout)               { el('inp-timeout').value       = o.requestTimeout; }
     }
-    var editor = el('meta-editor');
-    editor.innerHTML = '';
+
+    // ── 2. Reset metadata editor ─────────────────────────────────────────
+    el('meta-editor').innerHTML = '';
     if (s.request && s.request.metadata) {
       var keys = Object.keys(s.request.metadata);
       for (var i = 0; i < keys.length; i++) {
         addMetaRow(keys[i], String(s.request.metadata[keys[i]]));
       }
     }
+
+    // ── 3. Pre-fill message ───────────────────────────────────────────────
     if (s.request && s.request.messages && s.request.messages[0]) {
       var inp = el('chat-input');
       inp.value = s.request.messages[0].content;
       autoResize(inp);
     }
-    appendInfo(s.name, s.explanation);
+
+    // ── 4. Clear chat + gateway info, show explanation card ──────────────
+    var msgs = el('chat-msgs');
+    msgs.innerHTML = '';
+    currentLogId = null;
+    fbChoice = null;
+
+    el('info-panel').innerHTML = '<div class="info-empty"><svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24" style="opacity:.4"><path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z"/></svg>Response metadata will appear here</div>';
+
+    var card = document.createElement('div');
+    card.className = 'msg-info';
+    card.innerHTML = '<strong>' + esc(s.name) + '</strong><br>' + esc(s.explanation);
+    msgs.appendChild(card);
+    scrollToBottom(msgs);
+    el('chat-input').focus();
   }
 
   // ── Chat helpers ──────────────────────────────────────────────────────────
@@ -929,9 +975,61 @@ select{cursor:pointer}
     })(0);
   }
 
+  // ── Resizable panels ─────────────────────────────────────────────────────
+  function initResizers() {
+    var layout   = el('main-layout');
+    var leftW    = 252;
+    var rightW   = 292;
+
+    function applyWidths() {
+      layout.style.gridTemplateColumns =
+        leftW + 'px 5px minmax(300px,1fr) 5px ' + rightW + 'px';
+    }
+
+    function makeResizer(resizerId, side) {
+      var handle = el(resizerId);
+      if (!handle) { return; }
+
+      handle.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        var startX   = e.clientX;
+        var startLeft  = leftW;
+        var startRight = rightW;
+        handle.classList.add('is-dragging');
+        document.body.style.cursor     = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function onMove(e) {
+          var dx = e.clientX - startX;
+          if (side === 'left') {
+            leftW = Math.max(160, Math.min(520, startLeft + dx));
+          } else {
+            rightW = Math.max(180, Math.min(520, startRight - dx));
+          }
+          applyWidths();
+        }
+
+        function onUp() {
+          handle.classList.remove('is-dragging');
+          document.body.style.cursor     = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup',   onUp);
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+      });
+    }
+
+    makeResizer('resizer-left',  'left');
+    makeResizer('resizer-right', 'right');
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   function init() {
     console.log('[ui] init() start');
+    initResizers();
 
     // Default metadata
     addMetaRow('userId', 'demo-user');

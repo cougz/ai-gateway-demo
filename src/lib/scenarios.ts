@@ -1,25 +1,112 @@
 import type { Scenario } from "../types";
 
-// All scenarios use Workers AI models exclusively — no external provider keys required.
-// The Workers AI billing runs through your Cloudflare account via CF_API_TOKEN.
-//
-// Workers AI models used:
-//   LARGE  @cf/meta/llama-3.3-70b-instruct-fp8-fast  — highest quality, fast
-//   MEDIUM @cf/meta/llama-3.1-8b-instruct            — good balance, lower cost
-//   SMALL  @cf/mistral/mistral-7b-instruct-v0.1      — cheapest, fastest
-
+// ── Workers AI model strings ──────────────────────────────────────────────────
+// No external provider keys required — billed through the Cloudflare account.
 export const WA_LARGE  = "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 export const WA_MEDIUM = "workers-ai/@cf/meta/llama-3.1-8b-instruct";
 export const WA_SMALL  = "workers-ai/@cf/mistral/mistral-7b-instruct-v0.1";
 
+// ── Dynamic route names (configured in AI Gateway dashboard) ─────────────────
+const DR_PLAN    = "dynamic/plan-router";
+const DR_ENV     = "dynamic/env-router";
+const DR_HA      = "dynamic/ha-chain";
+const DR_COST    = "dynamic/cost-aware";
+
 export const SCENARIOS: Scenario[] = [
 
-  // ── 1. Healthcare — HIPAA-style PII/PHI safety ──────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // DYNAMIC ROUTING — each route has both branches so you can flip the metadata
+  // and watch cf-aig-model + cf-aig-step change live in the Gateway Info panel.
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ── plan-router: free tier ───────────────────────────────────────────────
+  {
+    id: "plan-router-free",
+    name: "Plan Router — Free Tier",
+    description: "dynamic/plan-router · metadata.plan=free → rate-limited → Mistral 7B",
+    explanation: "The `plan-router` route checks `metadata.plan`. Free tenants hit a Rate Limit node (10 req/hr per tenantId) before reaching the small model. Watch `cf-aig-step` and `cf-aig-model` — then switch to the Paid variant to see both change.",
+    request: {
+      model: DR_PLAN,
+      messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
+      metadata: { tenantId: "acme-corp", plan: "free", region: "eu-west" },
+    },
+  },
+
+  // ── plan-router: paid tier ───────────────────────────────────────────────
+  {
+    id: "plan-router-paid",
+    name: "Plan Router — Paid Tier",
+    description: "dynamic/plan-router · metadata.plan=paid → skips rate limit → Llama 70B",
+    explanation: "Same `plan-router` route, same endpoint, but `metadata.plan=paid` skips the rate limit node entirely and reaches the large model directly. Compare `cf-aig-step` with the Free variant — the route graph takes a completely different path.",
+    request: {
+      model: DR_PLAN,
+      messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
+      metadata: { tenantId: "acme-corp", plan: "paid", region: "eu-west" },
+    },
+  },
+
+  // ── env-router: staging ──────────────────────────────────────────────────
+  {
+    id: "env-router-staging",
+    name: "Env Router — Staging",
+    description: "dynamic/env-router · metadata.env=staging → Mistral 7B (cheap)",
+    explanation: "The `env-router` route reads `metadata.env`. Staging and dev traffic automatically lands on the small model — 90% cheaper, no code changes needed. Flip to the Production variant to see the model switch instantly.",
+    request: {
+      model: DR_ENV,
+      messages: [{ role: "user", content: "Write a one-line description for a function that validates email addresses." }],
+      metadata: { env: "staging", team: "backend", feature: "email-validator" },
+    },
+  },
+
+  // ── env-router: production ───────────────────────────────────────────────
+  {
+    id: "env-router-production",
+    name: "Env Router — Production",
+    description: "dynamic/env-router · metadata.env=production → Llama 70B (best quality)",
+    explanation: "Same `env-router` route, same code. `metadata.env=production` routes to the large model. The only difference between this and the Staging variant is a single metadata value — no deployments, no config changes.",
+    request: {
+      model: DR_ENV,
+      messages: [{ role: "user", content: "Write a one-line description for a function that validates email addresses." }],
+      metadata: { env: "production", team: "backend", feature: "email-validator" },
+    },
+  },
+
+  // ── ha-chain: zero-downtime failover ─────────────────────────────────────
+  {
+    id: "model-failover",
+    name: "HA Chain — Model Failover",
+    description: "dynamic/ha-chain · Llama 70B → Llama 8B → Mistral 7B on error/timeout",
+    explanation: "The `ha-chain` route sequences three models with a 5s timeout per node. If the primary errors or times out, the gateway automatically tries the next. `cf-aig-step` tells you which node answered. `requestTimeout: 2000` is set short here to make failover easier to trigger in a demo.",
+    request: {
+      model: DR_HA,
+      messages: [{ role: "user", content: "Which model are you? Answer in one sentence." }],
+      options: { requestTimeout: 2000 },
+    },
+  },
+
+  // ── cost-aware: budget degradation ───────────────────────────────────────
+  {
+    id: "budget-degradation",
+    name: "Cost-Aware — Budget Degradation",
+    description: "dynamic/cost-aware · $0.50/day per userId — degrades to small model silently",
+    explanation: "The `cost-aware` route enforces a $0.50/day spend limit per `metadata.userId`. Under budget: Llama 70B. Over budget: Mistral 7B — no 429, no client error. `cf-aig-model` reveals which model served the request.",
+    request: {
+      model: DR_COST,
+      messages: [{ role: "user", content: "Explain the trade-offs between eventual consistency and strong consistency." }],
+      metadata: { userId: "demo-user", team: "platform" },
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // DIRECT WORKERS AI — gateway features demoed without dynamic routing
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ── HIPAA-style log privacy ───────────────────────────────────────────────
   {
     id: "healthcare-pii-safety",
-    name: "Healthcare — PII Safety",
-    description: "Disable prompt/response storage for HIPAA-style compliance",
-    explanation: "Healthcare AI must never persist patient data. Setting `cf-aig-collect-log-payload: false` instructs the gateway to log only metadata — token counts, model, cost, duration — without storing the prompt or response body. Audit requirements are met without PHI exposure.",
+    name: "Healthcare — Log Privacy",
+    description: "collectLogPayload: false — tokens/cost logged, prompt/response not stored",
+    explanation: "Healthcare AI must never persist patient data. `cf-aig-collect-log-payload: false` tells the gateway to log only metadata (tokens, cost, model, duration) without storing prompt or response content. Full audit trail without PHI exposure.",
     request: {
       model: WA_LARGE,
       messages: [{ role: "user", content: "Summarise the key contraindications for metformin in elderly patients with renal impairment." }],
@@ -28,52 +115,26 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 
-  // ── 2. Per-Employee AI Budget ────────────────────────────────────────────
-  {
-    id: "per-employee-budget",
-    name: "Per-Employee AI Budget",
-    description: "Spend limits scoped to userId — each employee gets a daily cap",
-    explanation: "A spend limit rule on the gateway is scoped to `metadata.userId` with 'split by value'. Each unique userId gets an independent budget bucket (e.g. $20/day). When the budget is exhausted the gateway returns 429 — no code changes on the client side required.",
-    request: {
-      model: WA_MEDIUM,
-      messages: [{ role: "user", content: "Draft a concise executive summary of our Q3 cloud infrastructure spend, highlighting the three largest cost drivers." }],
-      metadata: { userId: "emp-1042", department: "engineering", costCenter: "CC-ENG-001" },
-    },
-  },
-
-  // ── 3. SaaS Multi-Tenant Rate Limiting ──────────────────────────────────
-  {
-    id: "saas-rate-limiting",
-    name: "SaaS Multi-Tenant Rate Limiting",
-    description: "Dynamic route: free plan → 10 req/hr on small model; paid → large model",
-    explanation: "One `plan-router` dynamic route handles all tenants. Free: Rate Limit node (10 req/hr) → small model. Paid: large model, no cap. Switch `metadata.plan` between 'free' and 'paid' to see `cf-aig-model` and `cf-aig-step` change — all without touching application code.",
-    request: {
-      model: "dynamic/plan-router",
-      messages: [{ role: "user", content: "Analyse the sentiment of this review: 'The product works well but onboarding was confusing.'" }],
-      metadata: { tenantId: "acme-corp", plan: "free", region: "eu-west" },
-    },
-  },
-
-  // ── 4. Compliance Audit Trail — SOC 2 ───────────────────────────────────
+  // ── SOC 2 audit trail ────────────────────────────────────────────────────
   {
     id: "compliance-audit-trail",
-    name: "Compliance Audit Trail (SOC 2)",
-    description: "Full request/response logging with structured identity metadata",
-    explanation: "SOC 2 and ISO 27001 require a complete, attributable audit trail for AI usage. Every request is logged with the user identity, purpose, and full prompt/response. Logs are exportable via Logpush to a SIEM. The `requestId` field enables correlation with your own audit system.",
+    name: "Compliance — Full Audit Trail",
+    description: "Full logging with structured identity metadata for SOC 2 / ISO 27001",
+    explanation: "SOC 2 requires a complete, attributable AI audit trail. Every request is logged with user identity, purpose, full prompt and response. Exportable via Logpush to a SIEM. The `requestId` field enables correlation with your own audit system.",
     request: {
       model: WA_LARGE,
-      messages: [{ role: "user", content: "Review this contract clause for GDPR compliance risks: 'Data may be shared with third parties for analytics purposes.'" }],
+      messages: [{ role: "user", content: "Review this clause for GDPR risks: 'Data may be shared with third parties for analytics purposes.'" }],
       metadata: { userId: "jane.doe@corp.com", purpose: "contract-review", requestId: "req-8f2a1b" },
       options: { collectLog: true, collectLogPayload: true },
     },
   },
 
-  // ── 5. High-Traffic FAQ Cache ────────────────────────────────────────────
+  // ── FAQ cache ────────────────────────────────────────────────────────────
   {
     id: "faq-cache",
-    name: "High-Traffic FAQ Cache",
-    description: "24-hour cache on repeated questions — zero token cost on HIT",
-    explanation: "Frequently asked questions cost nothing after the first response. A 24-hour TTL with a version-tagged cache key (`faq-v2`) means identical queries are served in <10ms from cache. Watch `cf-aig-cache-status` flip from MISS to HIT on the second send — and notice the latency drop.",
+    name: "FAQ Cache — Hit / Miss",
+    description: "Send twice — MISS then HIT, zero token cost on cached response",
+    explanation: "24-hour TTL with a version-tagged cache key. Identical queries are served from cache in <10ms with zero token cost. Send this scenario twice and watch `cf-aig-cache-status` flip from MISS to HIT and latency drop dramatically.",
     request: {
       model: WA_MEDIUM,
       messages: [{ role: "user", content: "What are Cloudflare's data centre locations in Europe?" }],
@@ -81,51 +142,12 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 
-  // ── 6. Zero-Downtime Model Failover ─────────────────────────────────────
-  {
-    id: "model-failover",
-    name: "Zero-Downtime Model Failover",
-    description: "Dynamic route chains three Workers AI models — automatic fallback on error",
-    explanation: "A `ha-chain` route sequences: large model → medium model → small model. If the primary errors or times out, the gateway retries the next node automatically. `cf-aig-step` shows which model actually answered. A 2-second timeout (`requestTimeout: 2000`) is set to trigger failover faster in the demo.",
-    request: {
-      model: "dynamic/ha-chain",
-      messages: [{ role: "user", content: "What model answered this request? Identify yourself briefly." }],
-      options: { requestTimeout: 2000 },
-    },
-  },
-
-  // ── 7. Dev / Staging Cost Controls ──────────────────────────────────────
-  {
-    id: "dev-prod-routing",
-    name: "Dev vs. Prod Model Routing",
-    description: "env metadata routes staging traffic to the cheap model automatically",
-    explanation: "A `env-router` dynamic route reads `metadata.env`: 'staging' or 'dev' → small model (90% cheaper); 'production' → large model. Developers call the same endpoint — no config changes between environments. CI/CD just sets the metadata field.",
-    request: {
-      model: "dynamic/env-router",
-      messages: [{ role: "user", content: "Generate a one-line unit test description for a function that validates email addresses." }],
-      metadata: { env: "staging", team: "backend", feature: "email-validator" },
-    },
-  },
-
-  // ── 8. Budget-Aware Model Degradation ───────────────────────────────────
-  {
-    id: "budget-degradation",
-    name: "Budget-Aware Model Degradation",
-    description: "Spend limit on large model silently falls back to small — no 429",
-    explanation: "A Budget Limit node on the `cost-aware` route sets a daily cap on the large model. When exceeded, instead of returning 429, the gateway routes to the small model as a fallback. Users get a degraded but functional experience. `cf-aig-model` in the response reveals which model handled the request.",
-    request: {
-      model: "dynamic/cost-aware",
-      messages: [{ role: "user", content: "Explain the trade-offs between eventual consistency and strong consistency in distributed systems." }],
-      metadata: { userId: "demo-user", team: "platform" },
-    },
-  },
-
-  // ── 9. Retry on Flaky Provider ───────────────────────────────────────────
+  // ── Retry policy ─────────────────────────────────────────────────────────
   {
     id: "retry-policy",
-    name: "Retry Policy",
-    description: "Exponential backoff — 3 attempts, 500ms initial delay",
-    explanation: "Production AI calls fail. Setting `cf-aig-max-attempts: 3`, `cf-aig-retry-delay: 500`, `cf-aig-backoff: exponential` makes the gateway retry automatically on provider errors — without any client-side logic. The gateway absorbs transient failures invisibly.",
+    name: "Retry — Exponential Backoff",
+    description: "3 attempts, 500ms initial delay, exponential backoff",
+    explanation: "`cf-aig-max-attempts: 3`, `cf-aig-retry-delay: 500`, `cf-aig-backoff: exponential` — the gateway retries automatically on provider errors without any client-side logic. Transient failures are absorbed invisibly.",
     request: {
       model: WA_LARGE,
       messages: [{ role: "user", content: "Summarise the CAP theorem in two sentences." }],
@@ -133,17 +155,30 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 
-  // ── 10. User-Agent Observability ────────────────────────────────────────
+  // ── User-Agent observability ─────────────────────────────────────────────
   {
     id: "user-agent-observability",
-    name: "User-Agent Observability (Jun 2026)",
-    description: "Identify which SDK or service is generating traffic in gateway logs",
-    explanation: "AI Gateway now captures the User-Agent of every request (Jun 2026). Setting a descriptive value — `internal-summariser/2.1 (finance-team)` — lets you filter logs in the dashboard by team or service. Useful when multiple internal services share one gateway and you need to attribute costs.",
+    name: "User-Agent Observability",
+    description: "Custom User-Agent visible in gateway logs — Jun 2026 feature",
+    explanation: "AI Gateway now captures the User-Agent of every request. A descriptive value lets you filter logs in the dashboard by team or service — essential when multiple internal services share one gateway and you need to attribute costs per team.",
     request: {
       model: WA_MEDIUM,
-      messages: [{ role: "user", content: "Summarise: Cloudflare AI Gateway is a proxy layer that adds caching, rate limiting, observability, and dynamic routing to AI provider calls." }],
+      messages: [{ role: "user", content: "Summarise: Cloudflare AI Gateway adds caching, rate limiting, observability, and dynamic routing to AI provider calls." }],
       metadata: { team: "finance", service: "document-summariser" },
       options: { userAgent: "internal-summariser/2.1 (finance-team)" },
+    },
+  },
+
+  // ── Per-employee spend limit ──────────────────────────────────────────────
+  {
+    id: "per-employee-budget",
+    name: "Spend Limits — Per Employee",
+    description: "metadata.userId drives independent per-user daily cost budgets",
+    explanation: "With a spend limit rule scoped to `metadata.userId` (split by value), each employee gets an independent budget bucket. When the budget is exhausted, the gateway returns 429 — or you can configure a fallback model instead of an error.",
+    request: {
+      model: WA_MEDIUM,
+      messages: [{ role: "user", content: "Draft a concise executive summary of our Q3 cloud infrastructure spend." }],
+      metadata: { userId: "emp-1042", department: "engineering", costCenter: "CC-ENG-001" },
     },
   },
 
