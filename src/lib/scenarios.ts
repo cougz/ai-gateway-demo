@@ -29,6 +29,7 @@ export const SCENARIOS: Scenario[] = [
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
       metadata: { tenantId: "acme-corp", plan: "free", region: "eu-west" },
+      options: { skipCache: true },
     },
   },
 
@@ -42,6 +43,7 @@ export const SCENARIOS: Scenario[] = [
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
       metadata: { tenantId: "acme-corp", plan: "paid", region: "eu-west" },
+      options: { skipCache: true },
     },
   },
 
