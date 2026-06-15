@@ -80,11 +80,7 @@ select{cursor:pointer}
 .sc-card:active{scale:.99}
 .sc-card-name{font-size:12px;font-weight:500;color:var(--text);line-height:1.3;margin-bottom:2px}
 .sc-card-desc{font-size:11px;color:var(--muted);line-height:1.4}
-.sc-card .cr{position:absolute;width:6px;height:6px;border:1px solid var(--border);border-radius:1px;background:var(--bg)}
-.sc-card .cr-tl{top:-3px;left:-3px}
-.sc-card .cr-tr{top:-3px;right:-3px}
-.sc-card .cr-bl{bottom:-3px;left:-3px}
-.sc-card .cr-br{bottom:-3px;right:-3px}
+
 
 /* ── Model chips ── */
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
@@ -136,11 +132,7 @@ select{cursor:pointer}
 /* ── Gateway info ── */
 .info-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--subtle);padding:20px;text-align:center;font-size:12px}
 .info-card{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px}
-.info-card .cr{position:absolute;width:6px;height:6px;border:1px solid var(--border);border-radius:1px;background:var(--bg)}
-.info-card .cr-tl{top:-3px;left:-3px}
-.info-card .cr-tr{top:-3px;right:-3px}
-.info-card .cr-bl{bottom:-3px;left:-3px}
-.info-card .cr-br{bottom:-3px;right:-3px}
+
 .info-row{display:grid;grid-template-columns:72px 1fr;gap:6px;font-size:12px;align-items:start}
 .info-k{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--subtle);font-family:var(--mono);padding-top:1px}
 .info-v{font-family:var(--mono);font-size:12px;color:var(--text);word-break:break-all}
@@ -574,8 +566,7 @@ select{cursor:pointer}
         var card = document.createElement('button');
         card.className = 'sc-card';
         card.innerHTML =
-          '<div class="cr cr-tl"></div><div class="cr cr-tr"></div>' +
-          '<div class="cr cr-bl"></div><div class="cr cr-br"></div>' +
+
           '<div class="sc-card-name">' + esc(s.name) + '</div>' +
           '<div class="sc-card-desc">' + esc(s.description) + '</div>';
         card.onclick = function () { applyScenario(s); };
@@ -708,7 +699,7 @@ select{cursor:pointer}
     function makeCard(rows) {
       var card = document.createElement('div');
       card.className = 'info-card';
-      card.innerHTML = '<div class="cr cr-tl"></div><div class="cr cr-tr"></div><div class="cr cr-bl"></div><div class="cr cr-br"></div>';
+      card.innerHTML = '';
       var rr = document.createElement('div');
       rr.className = 'info-rows';
       for (var i = 0; i < rows.length; i++) {
@@ -772,7 +763,7 @@ select{cursor:pointer}
     // Feedback card
     var fbCard = document.createElement('div');
     fbCard.className = 'info-card';
-    fbCard.innerHTML = '<div class="cr cr-tl"></div><div class="cr cr-tr"></div><div class="cr cr-bl"></div><div class="cr cr-br"></div>';
+    fbCard.innerHTML = '';
     var fbLabel = document.createElement('div');
     fbLabel.className = 'info-k';
     fbLabel.textContent = 'Feedback';
