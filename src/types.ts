@@ -15,6 +15,8 @@ export interface GatewayRequestOptions {
   backoff?: "constant" | "linear" | "exponential";
   /** Arbitrary extra headers forwarded to the gateway as-is */
   extraHeaders?: Record<string, string>;
+  /** BYOK alias for non-default provider keys (e.g. "private") — adds cf-aig-byok-alias header */
+  byokAlias?: string;
 }
 
 export interface GatewayRequest {
@@ -74,4 +76,6 @@ export interface Env {
   CF_ACCOUNT_ID: string;
   /** Set as var in wrangler.jsonc — not a secret */
   GATEWAY_ID: string;
+  /** Gateway auth token — set via `wrangler secret put CF_AIG_TOKEN` */
+  CF_AIG_TOKEN: string;
 }

@@ -131,8 +131,14 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
       const o = req.options ?? {};
       const fetchHeaders: Record<string, string> = {
         "Content-Type": "application/json",
+        // Gateway authentication — required when authentication is enabled on the gateway.
+        // AI binding requests are pre-authenticated; only the compat fetch path needs this.
+        ...(env.CF_AIG_TOKEN ? { "cf-aig-authorization": `Bearer ${env.CF_AIG_TOKEN}` } : {}),
         ...extraHeaders,
       };
+
+      // BYOK alias for non-default provider keys (e.g. OpenRouter stored as "private")
+      if (o.byokAlias) fetchHeaders["cf-aig-byok-alias"] = o.byokAlias;
 
       // Translate all gateway options to cf-aig-* headers
       if (req.metadata && Object.keys(req.metadata).length)

@@ -10,6 +10,10 @@
     "GATEWAY_ID": "ai-gateway01"
   },
 
+  // Gateway auth token — used as cf-aig-authorization on compat fetch() requests.
+  // AI binding requests are pre-authenticated and do not need this header.
+  // Set via: npx wrangler secret put CF_AIG_TOKEN
+
   // Workers AI binding — handles all gateway auth automatically (no API token needed)
   "ai": {
     "binding": "AI"

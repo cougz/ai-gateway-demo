@@ -19,30 +19,27 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "plan-router-free",
     name: "Plan Router — Free Tier",
-    description: "dynamic/plan-router · metadata.plan=free → rate-limited → Mistral 7B",
-    explanation: "The `plan-router` route checks `metadata.plan`. Free tenants hit a Rate Limit node (3 req/min per tenantId) before reaching Mistral 7B. **To trigger the rate limit:** run this scenario 4 times in quick succession — the 4th request hits the fallback path and returns an error instead of a model response. Note: **Step is always 0** for both tiers because the counter only increments when multiple *model nodes* are attempted in one request (failover), not for control-flow nodes like rate limits.",
+    description: "dynamic/plan-router · metadata.plan=free → Mistral 7B (OpenRouter)",
+    explanation: "The `plan-router` route evaluates `metadata.plan`. Free traffic is routed by the gateway to Mistral 7B via OpenRouter. Watch the **Model** and **Provider** fields in the Gateway Info panel — then switch to the Paid variant to see both change. The routing decision lives entirely in the gateway: no code change needed to switch models.",
     request: {
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
       metadata: { tenantId: "acme-corp", plan: "free", region: "eu-west" },
-      options: { skipCache: true },
+      options: { skipCache: true, byokAlias: "private" },
     },
   },
 
   // ── plan-router: paid tier ───────────────────────────────────────────────
-  // Uses the AI binding (WA_LARGE) rather than the dynamic route because
-  // the gateway route model node only resolves legacy Workers AI models.
-  // The paid tier bypasses the rate-limited gateway route entirely.
   {
     id: "plan-router-paid",
     name: "Plan Router — Paid Tier",
-    description: "workers-ai · metadata.plan=paid → bypasses gateway route → Llama 3.3 70B",
-    explanation: "Paid traffic bypasses the `plan-router` gateway route entirely and is served directly by Llama 3.3 70B via the Workers AI binding — no rate limit node, no routing overhead. Compare the **Model** field with the Free variant: Mistral 7B (via gateway) vs Llama 3.3 70B (direct binding).",
+    description: "dynamic/plan-router · metadata.plan=paid → Llama 3.1 70B (OpenRouter)",
+    explanation: "Same `plan-router` route, same endpoint — only `metadata.plan` changes. The gateway routes paid traffic to Llama 3.1 70B via OpenRouter. Compare the **Model** field with the Free variant: the gateway selected a completely different model based solely on the metadata value.",
     request: {
-      model: WA_LARGE,
+      model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
       metadata: { tenantId: "acme-corp", plan: "paid", region: "eu-west" },
-      options: { skipCache: true },
+      options: { skipCache: true, byokAlias: "private" },
     },
   },
 
