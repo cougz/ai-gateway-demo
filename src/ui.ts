@@ -334,7 +334,7 @@ select{cursor:pointer}
 
       <div class="drawer-sec">
         <div class="drawer-sec-title">Identity &amp; User-Agent</div>
-        <div class="field-label">User-Agent <span style="color:var(--subtle);font-size:10px">(visible in gateway logs &mdash; Jun 2026)</span></div>
+          <div class="field-label">User-Agent <span style="color:var(--subtle);font-size:10px">(visible in gateway logs, Jun 2026)</span></div>
         <input id="inp-ua" value="ai-gateway-demo/1.0 (cloudflare-worker)">
         <div class="chips" id="ua-chips"></div>
       </div>
@@ -638,7 +638,7 @@ select{cursor:pointer}
     if (s.request && s.request.messages && s.request.messages[0]) {
       var inp = el('chat-input');
       inp.value = s.request.messages[0].content;
-      autoResize(inp);
+      inp.style.height = '';  // reset to CSS min-height, don't auto-expand on load
     }
 
     // ── 4. Clear chat + gateway info, show explanation card ──────────────
@@ -781,8 +781,8 @@ select{cursor:pointer}
     cacheTag.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:' + csColor + ';display:inline-block;flex-shrink:0"></span>' + cs;
 
     var modelRows = [
-      ['Model',    gw.model || '\u2014'],
-      ['Provider', gw.provider || '\u2014'],
+      ['Model',    gw.model || 'N/A'],
+      ['Provider', gw.provider || 'N/A'],
       ['Cache',    cacheTag],
     ];
     if (gw.step) { modelRows.push(['Step', gw.step]); }
@@ -936,7 +936,7 @@ select{cursor:pointer}
           if (d.error === 'dlp_blocked' || d.dlp) {
             var dlpObj = (d.dlp && typeof d.dlp === 'object') ? d.dlp : {};
             var action = dlpObj.action || 'BLOCKED';
-            appendError('DLP ' + action + ' — the gateway intercepted this request before it reached the model. Policy: ' + (dlpObj.policyId || dlpObj.policies || 'Source Code profile') + '. Check the AI Gateway logs for the full DLP event.');
+            appendError('DLP ' + action + ': the gateway intercepted this request before it reached the model. Policy: ' + (dlpObj.policyId || dlpObj.policies || 'PII profile') + '. Check the AI Gateway logs for the full DLP event.');
             // Still try to render partial gateway info if we have a log ID
             if (d.logId) {
               renderInfo({ logId: d.logId, cacheStatus: 'BYPASS', model: body.model, provider: '', latencyMs: 0, dlp: d.dlp });
@@ -1024,8 +1024,19 @@ select{cursor:pointer}
               ' &middot; ' + ms + 'ms' +
               (logSnip ? ' &middot; <span style="color:var(--subtle)">' + esc(logSnip) + '\u2026</span>' : '');
           } else {
-            var errMsg = (res.d && (res.d.message || res.d.error)) ? String(res.d.message || res.d.error) : String(res.s);
-            lineEl.innerHTML = '<span style="color:var(--error)">\u2717</span> ' + esc(errMsg.slice(0, 80));
+            // res.d.message is the raw gateway JSON string — try to extract the
+            // human-readable message from inside it, fall back to error code.
+            var errMsg = String(res.s);
+            if (res.d) {
+              try {
+                var inner = JSON.parse(res.d.message || '');
+                errMsg = inner.message || (inner.error && inner.error[0] && inner.error[0].message) || errMsg;
+              } catch (_) {
+                if (res.d.error && typeof res.d.error === 'string' && res.d.error.length < 60) errMsg = res.d.error;
+                else if (res.d.message && res.d.message.length < 60) errMsg = res.d.message;
+              }
+            }
+            lineEl.innerHTML = '<span style="color:var(--error)">\u2717</span> ' + esc(errMsg);
           }
         })
         .catch(function (e) {
@@ -1105,9 +1116,9 @@ select{cursor:pointer}
     // Model chips
     var modelChips = el('model-chips');
     var models = [
-      ['Large \u2014 Llama 3.3 70B', 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast'],
-      ['Medium \u2014 Llama 3.1 8B FP8', 'workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8'],
-      ['Small \u2014 Mistral 7B',    'workers-ai/@cf/mistral/mistral-7b-instruct-v0.1']
+      ['Large: Llama 3.3 70B',  'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast'],
+      ['Medium: Llama 3.1 8B', 'workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8'],
+      ['Small: Mistral 7B',    'workers-ai/@cf/mistral/mistral-7b-instruct-v0.1']
     ];
     for (var i = 0; i < models.length; i++) {
       (function (label, val) {
