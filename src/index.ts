@@ -17,6 +17,16 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", cors());
 
+// Request/response logging — visible in Cloudflare dashboard and `wrangler tail`
+app.use("*", async (c, next) => {
+  const start = Date.now();
+  const { method, url } = c.req.raw;
+  console.log(`[req] ${method} ${new URL(url).pathname}`);
+  await next();
+  const ms = Date.now() - start;
+  console.log(`[res] ${method} ${new URL(url).pathname} → ${c.res.status} (${ms}ms)`);
+});
+
 // Inject agent-readiness headers on every response
 app.use("*", async (c, next) => {
   await next();

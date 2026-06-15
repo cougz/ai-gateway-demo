@@ -31,5 +31,12 @@
       "tag": "v1",
       "new_sqlite_classes": ["AigDemoMcp"]
     }
-  ]
+  ],
+
+  // Enable Workers Observability — logs appear in the Cloudflare dashboard
+  // under Workers & Pages > ai-gateway-demo > Logs, and via: wrangler tail
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
 }

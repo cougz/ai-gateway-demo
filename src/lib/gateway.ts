@@ -85,6 +85,19 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
   Object.assign(extraHeaders, o.extraHeaders ?? {});
 
   // ── Call via AI binding — no Authorization token needed ───────────────────
+  // `id` is deprecated on UniversalGatewayOptions (the gateway was already
+  // specified in env.AI.gateway(gatewayId)) but the workers-types definition
+  // still requires it (Exclude<GatewayOptions,"id"> is a no-op on an object type).
+  const finalGatewayOpts = Object.keys(gatewayOpts).length
+    ? { id: gatewayId, ...gatewayOpts }
+    : undefined;
+
+  console.log("[gateway] calling", req.model, "via", provider, "/", endpoint, {
+    gatewayId,
+    metadata: req.metadata ?? null,
+    options: { skipCache: o.skipCache, cacheTtl: o.cacheTtl, maxAttempts: o.maxAttempts, userAgent: o.userAgent },
+  });
+
   const start = Date.now();
   let raw: Response;
 
@@ -92,15 +105,20 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
     raw = await gateway.run(
       { provider, endpoint, headers: reqHeaders, query },
       {
-        gateway: Object.keys(gatewayOpts).length ? gatewayOpts : undefined,
+        gateway: finalGatewayOpts,
         extraHeaders: Object.keys(extraHeaders).length ? extraHeaders : undefined,
       }
     );
   } catch (e) {
+    console.error("[gateway] fetch threw:", String(e));
     return { ok: false, error: { error: "network_error", status: 0, message: String(e) } };
   }
 
   const latencyMs = Date.now() - start;
+  console.log("[gateway] response", raw.status, latencyMs + "ms",
+    "cache:", raw.headers.get("cf-aig-cache-status"),
+    "model:", raw.headers.get("cf-aig-model"),
+    "logId:", raw.headers.get("cf-aig-log-id")?.slice(0, 12));
 
   if (!raw.ok) {
     const text = await raw.text().catch(() => "");
