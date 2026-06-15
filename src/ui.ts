@@ -272,8 +272,9 @@ export const UI_HTML = /* html */ `<!DOCTYPE html>
     <div class="panel-body">
 
       <div class="field-row">
-        <div class="field-label">Model</div>
-        <input id="model-input" value="workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast" placeholder="provider/model or dynamic/route-name">
+        <div class="field-label">Model <span style="color:var(--muted);font-size:10px">(Workers AI — no API key needed)</span></div>
+        <input id="model-input" value="workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast" placeholder="workers-ai/@cf/... or dynamic/route-name">
+        <div class="presets" id="model-presets" style="margin-top:4px"></div>
       </div>
 
       <div class="divider"></div>
@@ -311,7 +312,7 @@ export const UI_HTML = /* html */ `<!DOCTYPE html>
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
         </svg>
-        <p>Send a message or pick a<br>scenario to get started.</p>
+        <p>Pick a scenario on the left to demo<br>healthcare compliance, spend limits,<br>rate limiting, caching, failover &amp; more.</p>
       </div>
     </div>
     <div class="chat-input-bar">
@@ -444,14 +445,30 @@ async function init() {
     console.error('Failed to load scenarios', e);
   }
 
-  // UA presets
+  // Workers AI model presets
+  const modelPresets = [
+    ['Large',  'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast'],
+    ['Medium', 'workers-ai/@cf/meta/llama-3.1-8b-instruct'],
+    ['Small',  'workers-ai/@cf/mistral/mistral-7b-instruct-v0.1'],
+  ];
+  const mpEl = document.getElementById('model-presets');
+  modelPresets.forEach(([label, val]) => {
+    const chip = document.createElement('button');
+    chip.className = 'preset-chip';
+    chip.textContent = label;
+    chip.title = val;
+    chip.onclick = () => { document.getElementById('model-input').value = val; };
+    mpEl.appendChild(chip);
+  });
+
+  // UA presets (for the user-agent observability scenario)
   const presets = [
     'ai-gateway-demo/1.0 (cloudflare-worker)',
-    'openai-python/1.62.0',
-    'anthropic-sdk-js/0.34.0',
-    'langchain/0.3.0',
+    'internal-summariser/2.1 (finance-team)',
+    'compliance-checker/1.0 (legal)',
+    'support-bot/3.0 (customer-success)',
+    'ci-pipeline/1.0 (github-actions)',
     'curl/8.7.1',
-    'claude-code/1.0',
   ];
   const el = document.getElementById('ua-presets');
   presets.forEach(p => {

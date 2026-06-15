@@ -61,19 +61,27 @@ claude mcp add --transport http ai-gateway-demo https://your-worker.workers.dev/
 export function buildLlmsTxt(base: string): string {
   return `# AI Gateway Demo
 
-A Cloudflare Worker that generates and inspects Cloudflare AI Gateway traffic.
-Use it to demo Dynamic Routing, caching, spend limits, custom metadata,
-retries, log privacy, and observability — via chat UI, REST API, and MCP.
+A Cloudflare Worker that demonstrates Cloudflare AI Gateway using **Workers AI models only**
+(no external provider API keys required). Covers real-world scenarios: HIPAA-style log
+privacy, per-employee spend limits, SaaS rate limiting, SOC 2 audit trails, FAQ caching,
+zero-downtime model failover, dev/prod routing, and budget-aware model degradation.
+
+## Models (all Workers AI — billed through Cloudflare)
+
+- workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast  (large — best quality)
+- workers-ai/@cf/meta/llama-3.1-8b-instruct            (medium — balanced)
+- workers-ai/@cf/mistral/mistral-7b-instruct-v0.1      (small — cheapest)
+- dynamic/<route-name>                                  (dynamic routing in gateway dashboard)
 
 ## Key Endpoints
 
-- POST ${base}/api/chat          — Send a message to AI Gateway
-- GET  ${base}/api/scenarios     — List preset demo scenarios
+- POST ${base}/api/chat              — Send a message to AI Gateway
+- GET  ${base}/api/scenarios         — List preset demo scenarios
 - POST ${base}/api/scenarios/:id/run — Run a scenario by ID
-- GET  ${base}/api/log/:id       — Retrieve a log entry by ID
-- POST ${base}/api/feedback      — Submit thumbs-up/down + score on a log
-- GET  ${base}/mcp               — MCP server (Streamable HTTP — 7 tools)
-- GET  ${base}/openapi.json      — Full OpenAPI 3.1 spec
+- GET  ${base}/api/log/:id           — Retrieve a log entry by ID
+- POST ${base}/api/feedback          — Submit thumbs-up/down + score on a log
+- GET  ${base}/mcp                   — MCP server (Streamable HTTP — 7 tools)
+- GET  ${base}/openapi.json          — Full OpenAPI 3.1 spec
 
 ## MCP Tools
 
@@ -84,23 +92,24 @@ retries, log privacy, and observability — via chat UI, REST API, and MCP.
 | run_scenario | Execute a scenario by ID |
 | get_log | Retrieve a gateway log entry |
 | submit_feedback | Thumbs-up/down + score on a log |
-| compare | Same prompt across 2–5 models simultaneously |
+| compare | Same Workers AI prompt across 2–5 models simultaneously |
 | batch_chat | Up to 20 requests with metadata variations |
 
 ## Request Options (all optional)
 
-- model: "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast" | "openai/gpt-4o-mini" | "dynamic/<route-name>"
-- metadata: {userId, tier, team, ...}   (up to 5 entries — drives dynamic routing)
-- options.userAgent: string             (sets User-Agent, visible in gateway logs — Jun 2026)
+- model: "workers-ai/@cf/..." | "dynamic/<route-name>"
+- metadata: {userId, department, env, plan, ...}  (up to 5 entries — drives routing + spend limits)
+- options.userAgent: string             (sets User-Agent header, visible in gateway logs — Jun 2026)
 - options.skipCache / cacheTtl / cacheKey
-- options.collectLogPayload: false      (metadata-only logging — Mar 2026)
+- options.collectLogPayload: false      (metadata-only logging, no prompt/response stored — Mar 2026)
 - options.maxAttempts / retryDelay / backoff
 - options.requestTimeout (ms)
 - options.extraHeaders: Record<string,string>
 
 ## Authentication
 
-None required. Worker authenticates to AI Gateway internally via CF_API_TOKEN secret.
+None required on this Worker. Worker authenticates to AI Gateway via CF_API_TOKEN secret.
+Workers AI is billed through your Cloudflare account — no external provider keys needed.
 
 ## Agent Readiness
 
@@ -151,17 +160,33 @@ export function buildOpenApi(base: string): unknown {
               "application/json": {
                 schema: { $ref: "#/components/schemas/GatewayRequest" },
                 examples: {
-                  workers_ai: {
-                    summary: "Workers AI (no provider key needed)",
-                    value: { model: "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast", messages: [{ role: "user", content: "Hello!" }] },
+                  workers_ai_large: {
+                    summary: "Workers AI — large model (best quality)",
+                    value: { model: "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast", messages: [{ role: "user", content: "Explain the CAP theorem." }] },
                   },
-                  dynamic_route: {
-                    summary: "Dynamic route with tier metadata",
-                    value: { model: "dynamic/tier-router", messages: [{ role: "user", content: "Hello!" }], metadata: { tier: "pro", userId: "u42" } },
+                  workers_ai_medium: {
+                    summary: "Workers AI — medium model (balanced)",
+                    value: { model: "workers-ai/@cf/meta/llama-3.1-8b-instruct", messages: [{ role: "user", content: "Summarise this in one sentence: 'AI Gateway adds caching, rate limiting, and observability to AI API calls.'" }] },
                   },
-                  all_options: {
-                    summary: "Full options showcase",
-                    value: { model: "openai/gpt-4o-mini", messages: [{ role: "user", content: "Hello!" }], metadata: { userId: "u1", team: "eng" }, options: { userAgent: "openai-python/1.62.0", cacheTtl: 300, collectLogPayload: false, maxAttempts: 3, backoff: "exponential" } },
+                  dynamic_spend_limit: {
+                    summary: "Dynamic route + per-user spend limit metadata",
+                    value: { model: "dynamic/cost-aware", messages: [{ role: "user", content: "Hello!" }], metadata: { userId: "emp-1042", department: "engineering" } },
+                  },
+                  compliance_privacy: {
+                    summary: "Compliance — metadata-only logging (no PHI stored)",
+                    value: { model: "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast", messages: [{ role: "user", content: "Summarise contraindications for metformin." }], metadata: { department: "clinical", dataClass: "PHI" }, options: { collectLog: true, collectLogPayload: false } },
+                  },
+                  faq_cache: {
+                    summary: "FAQ cache — 24h TTL, zero token cost on HIT",
+                    value: { model: "workers-ai/@cf/meta/llama-3.1-8b-instruct", messages: [{ role: "user", content: "What are Cloudflare's EU data centre locations?" }], options: { cacheTtl: 86400, cacheKey: "faq-v2" } },
+                  },
+                  retry_policy: {
+                    summary: "Retry policy — exponential backoff, 3 attempts",
+                    value: { model: "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast", messages: [{ role: "user", content: "Hello!" }], options: { maxAttempts: 3, retryDelay: 500, backoff: "exponential", requestTimeout: 10000 } },
+                  },
+                  user_agent: {
+                    summary: "User-Agent observability (Jun 2026 feature)",
+                    value: { model: "workers-ai/@cf/meta/llama-3.1-8b-instruct", messages: [{ role: "user", content: "Hello!" }], metadata: { team: "finance" }, options: { userAgent: "internal-summariser/2.1 (finance-team)" } },
                   },
                 },
               },
@@ -230,7 +255,18 @@ export function buildOpenApi(base: string): unknown {
           type: "object",
           required: ["model", "messages"],
           properties: {
-            model:    { type: "string", description: "Model string: 'provider/model', 'workers-ai/@cf/...', or 'dynamic/<route-name>'" },
+            model: {
+                type: "string",
+                description: "Workers AI model or dynamic route. Examples: 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'workers-ai/@cf/meta/llama-3.1-8b-instruct', 'dynamic/<route-name>'",
+                examples: [
+                  "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                  "workers-ai/@cf/meta/llama-3.1-8b-instruct",
+                  "workers-ai/@cf/mistral/mistral-7b-instruct-v0.1",
+                  "dynamic/plan-router",
+                  "dynamic/ha-chain",
+                  "dynamic/cost-aware",
+                ],
+              },
             messages: { type: "array", items: { type: "object", properties: { role: { type: "string", enum: ["user", "assistant", "system"] }, content: { type: "string" } } } },
             metadata: { type: "object", description: "Up to 5 flat key-value pairs. Values: string | number | boolean. Drives dynamic routing and spend limits." },
             options: {
