@@ -131,6 +131,11 @@ select{cursor:pointer}
 .send-btn:hover:not(:disabled){background:var(--orange-h)}
 .send-btn:active:not(:disabled){transform:translateY(1px);scale:.98}
 .send-btn:disabled{opacity:.45;cursor:not-allowed}
+.burst-btn{align-self:flex-end;padding:9px 14px;border-radius:9999px;border:1px solid var(--border);background:var(--bg-card);color:var(--muted);font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;flex-shrink:0;display:flex;align-items:center;gap:5px}
+.burst-btn:hover:not(:disabled){border-color:var(--orange);color:var(--orange)}
+.burst-btn:active:not(:disabled){transform:translateY(1px)}
+.burst-btn:disabled{opacity:.45;cursor:not-allowed}
+.burst-lines{display:flex;flex-direction:column;gap:2px;margin-top:6px;font-family:var(--mono);font-size:11px;line-height:1.6}
 
 /* ── Gateway info ── */
 .info-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--subtle);padding:20px;text-align:center;font-size:12px}
@@ -255,9 +260,7 @@ select{cursor:pointer}
           <span>requests,</span>
           <input type="number" id="gen-delay" value="500" min="0" max="5000">
           <span>ms apart</span>
-          <button class="btn btn-sm btn-primary" id="gen-btn">Go</button>
         </div>
-        <div class="gen-log" id="gen-log" style="display:none"></div>
       </div>
 
     </div>
@@ -285,6 +288,12 @@ select{cursor:pointer}
     </div>
     <div class="input-bar">
       <textarea class="chat-in" id="chat-input" rows="1" placeholder="Type a message&hellip;"></textarea>
+      <button class="burst-btn" id="gen-btn" title="Send multiple requests using Traffic Generator settings">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z"/>
+        </svg>
+        Burst
+      </button>
       <button class="send-btn" id="send-btn">
         Send
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -956,17 +965,45 @@ select{cursor:pointer}
   function runTrafficGen() {
     var count = Math.min(50, Math.max(1, parseInt(el('gen-count').value, 10) || 5));
     var delay = Math.max(0, parseInt(el('gen-delay').value, 10) || 500);
-    var log = el('gen-log');
-    log.style.display = 'block';
-    log.textContent = '';
-    console.log('[ui] traffic gen start', count, 'requests,', delay, 'ms delay');
+    console.log('[ui] burst start', count, 'requests,', delay, 'ms delay');
+
+    removeEmpty();
+    var msgs = el('chat-msgs');
+    var btn = el('gen-btn');
+    if (btn) { btn.disabled = true; }
+
+    // Insert a single live-updating summary block into the chat history
+    var summaryEl = document.createElement('div');
+    summaryEl.className = 'msg-info';
+    summaryEl.innerHTML =
+      '<strong>Traffic Burst</strong> &middot; ' + count + ' request' + (count !== 1 ? 's' : '') +
+      ' &middot; ' + delay + 'ms apart';
+    var linesEl = document.createElement('div');
+    linesEl.className = 'burst-lines';
+    summaryEl.appendChild(linesEl);
+    msgs.appendChild(summaryEl);
+    scrollToBottom(msgs);
 
     (function run(i) {
-      if (i >= count) { log.textContent += '\u2500 Done (' + count + ' requests)\\n'; return; }
-      var body = buildRequest('Traffic generator request ' + (i + 1) + ' of ' + count);
-      log.textContent += '[' + (i + 1) + '/' + count + '] sending\u2026\\n';
-      log.scrollTop = log.scrollHeight;
+      if (i >= count) {
+        var doneEl = document.createElement('div');
+        doneEl.style.cssText = 'color:var(--subtle);margin-top:4px';
+        doneEl.textContent = '\u2500 Done (' + count + ' request' + (count !== 1 ? 's' : '') + ')';
+        linesEl.appendChild(doneEl);
+        scrollToBottom(msgs);
+        if (btn) { btn.disabled = false; }
+        return;
+      }
+
+      var lineEl = document.createElement('div');
+      lineEl.style.color = 'var(--subtle)';
+      lineEl.textContent = '[' + (i + 1) + '/' + count + '] \u2026';
+      linesEl.appendChild(lineEl);
+      scrollToBottom(msgs);
+
+      var body = buildRequest('Burst request ' + (i + 1) + ' of ' + count);
       var t0 = Date.now();
+
       fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -977,14 +1014,25 @@ select{cursor:pointer}
           var ms = Date.now() - t0;
           if (res.s === 200 && res.d.gateway) {
             var gw = res.d.gateway;
-            log.textContent += '  \u2713 ' + gw.cacheStatus + ' | ' + (gw.model || '?').split('/').pop() + ' | ' + ms + 'ms | ' + (gw.logId || '?').slice(0, 10) + '\u2026\\n';
+            var cs = gw.cacheStatus || 'MISS';
+            var model = (gw.model || '').split('/').pop() || '?';
+            var logSnip = (gw.logId || '').slice(0, 10);
+            lineEl.innerHTML =
+              '<span style="color:var(--success)">\u2713</span> ' +
+              '<span style="color:var(--text)">' + esc(cs) + '</span>' +
+              ' &middot; ' + esc(model) +
+              ' &middot; ' + ms + 'ms' +
+              (logSnip ? ' &middot; <span style="color:var(--subtle)">' + esc(logSnip) + '\u2026</span>' : '');
           } else {
-            log.textContent += '  \u2717 ' + (res.d.message || res.s) + '\\n';
+            var errMsg = (res.d && (res.d.message || res.d.error)) ? String(res.d.message || res.d.error) : String(res.s);
+            lineEl.innerHTML = '<span style="color:var(--error)">\u2717</span> ' + esc(errMsg.slice(0, 80));
           }
         })
-        .catch(function (e) { log.textContent += '  \u2717 ' + e + '\\n'; })
+        .catch(function (e) {
+          lineEl.innerHTML = '<span style="color:var(--error)">\u2717</span> ' + esc(String(e));
+        })
         .finally(function () {
-          log.scrollTop = log.scrollHeight;
+          scrollToBottom(msgs);
           if (delay > 0) {
             setTimeout(function () { run(i + 1); }, delay);
           } else {
