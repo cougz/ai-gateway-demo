@@ -122,26 +122,38 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
       ) as Response;
 
     } else {
-      // ── Dynamic routes / compat: use gateway().run() ──────────────────
-      // Requires gateway authentication = OFF on ai-gateway01.
-      const compatHeaders: Record<string, string | number | boolean> = {};
-      if (req.options?.collectLogPayload != null)
-        compatHeaders["cf-aig-collect-log-payload"] = String(req.options.collectLogPayload);
+      // ── Dynamic routes: direct fetch to gateway compat HTTP endpoint ───
+      // env.AI.gateway().run() with provider:"compat" goes through the AI
+      // binding's Workers AI schema validator before reaching the compat
+      // endpoint — breaking dynamic routes.  Direct fetch() bypasses that
+      // layer entirely.  Gateway authentication is OFF, so no auth header
+      // is needed; the gateway authenticates to Workers AI internally.
+      const o = req.options ?? {};
+      const fetchHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...extraHeaders,
+      };
 
-      const gatewayOpts = buildGatewayOptions(req, env);
+      // Translate all gateway options to cf-aig-* headers
+      if (req.metadata && Object.keys(req.metadata).length)
+        fetchHeaders["cf-aig-metadata"] = JSON.stringify(req.metadata);
+      if (o.skipCache)                  fetchHeaders["cf-aig-skip-cache"]           = "true";
+      if (o.cacheTtl != null)           fetchHeaders["cf-aig-cache-ttl"]            = String(o.cacheTtl);
+      if (o.cacheKey)                   fetchHeaders["cf-aig-cache-key"]            = o.cacheKey;
+      if (o.collectLog != null)         fetchHeaders["cf-aig-collect-log"]          = String(o.collectLog);
+      if (o.collectLogPayload != null)  fetchHeaders["cf-aig-collect-log-payload"]  = String(o.collectLogPayload);
+      if (o.requestTimeout != null)     fetchHeaders["cf-aig-request-timeout"]      = String(o.requestTimeout);
+      if (o.maxAttempts != null)        fetchHeaders["cf-aig-max-attempts"]         = String(o.maxAttempts);
+      if (o.retryDelay != null)         fetchHeaders["cf-aig-retry-delay"]          = String(o.retryDelay);
+      if (o.backoff)                    fetchHeaders["cf-aig-backoff"]              = o.backoff;
 
-      raw = await env.AI.gateway(gatewayId).run(
-        {
-          provider: "compat",
-          endpoint: "chat/completions",
-          headers: compatHeaders,
-          query: { model: req.model, messages: req.messages, stream: false },
-        },
-        {
-          gateway: gatewayOpts,
-          ...(Object.keys(extraHeaders).length ? { extraHeaders } : {}),
-        }
-      );
+      const compatUrl = `https://gateway.ai.cloudflare.com/v1/${env.CF_ACCOUNT_ID}/${gatewayId}/compat/chat/completions`;
+
+      raw = await fetch(compatUrl, {
+        method: "POST",
+        headers: fetchHeaders,
+        body: JSON.stringify({ model: req.model, messages: req.messages, stream: false }),
+      });
     }
   } catch (e) {
     console.error("[gateway] threw:", String(e));
