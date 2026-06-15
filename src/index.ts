@@ -219,7 +219,7 @@ app.post("/api/scenarios/:name/run", async (c) => {
 app.get("/api/health", (c) =>
   c.json({
     ok: true,
-    configured: !!(c.env.CF_ACCOUNT_ID && c.env.CF_API_TOKEN),
+    configured: !!(c.env.GATEWAY_ID),
     gatewayId: c.env.GATEWAY_ID || "default",
   })
 );

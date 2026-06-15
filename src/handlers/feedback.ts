@@ -15,15 +15,11 @@ export async function handleFeedback(c: Context<{ Bindings: Env }>): Promise<Res
   }
 
   try {
-    const gateway = (c.env.AI as unknown as { gateway(id: string): {
-      patchLog(id: string, opts: { feedback?: number; score?: number }): Promise<void>
-    } }).gateway(c.env.GATEWAY_ID || "default");
-
+    const gateway = c.env.AI.gateway(c.env.GATEWAY_ID || "ai-gateway01");
     await gateway.patchLog(body.logId, {
       feedback: body.feedback,
       ...(body.score != null ? { score: body.score } : {}),
     });
-
     return c.json({ ok: true, logId: body.logId });
   } catch (e) {
     return c.json({ error: String(e) }, 500);

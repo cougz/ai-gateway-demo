@@ -1,63 +1,101 @@
 import type { Env, GatewayRequest, GatewayResponse, GatewayErrorResult } from "../types";
 
-// ── Header assembly ──────────────────────────────────────────────────────────
+// ── Model string parsing ──────────────────────────────────────────────────────
+// The UI/API uses these model string formats:
+//   "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast"  → Workers AI via binding
+//   "dynamic/plan-router"                                   → Dynamic route via compat
+//
+// The binding call format is:
+//   provider: "workers-ai", endpoint: "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+//   provider: "compat",     endpoint: "chat/completions", query.model: "dynamic/plan-router"
 
-function buildHeaders(req: GatewayRequest, env: Env): Record<string, string> {
-  const o = req.options ?? {};
-  const h: Record<string, string> = {
-    "Content-Type": "application/json",
-    // Both headers needed: cf-aig-authorization authenticates to the gateway,
-    // Authorization is forwarded to the provider (Workers AI / Unified Billing uses the same token)
-    "Authorization": `Bearer ${env.CF_API_TOKEN}`,
-    "cf-aig-authorization": `Bearer ${env.CF_API_TOKEN}`,
-    // User-Agent is captured in gateway logs (Jun 2026 feature — filterable in dashboard)
-    "User-Agent": o.userAgent ?? "ai-gateway-demo/1.0 (cloudflare-worker)",
-  };
-
-  // Custom metadata → drives dynamic routing conditions + appears in logs
-  if (req.metadata && Object.keys(req.metadata).length > 0) {
-    h["cf-aig-metadata"] = JSON.stringify(req.metadata);
+function parseModel(model: string): { provider: string; endpoint: string; isCompat: boolean } {
+  if (model.startsWith("workers-ai/")) {
+    return {
+      provider: "workers-ai",
+      endpoint: model.slice("workers-ai/".length), // e.g. "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+      isCompat: false,
+    };
   }
-
-  if (o.skipCache)                    h["cf-aig-skip-cache"]           = "true";
-  if (o.cacheTtl != null)             h["cf-aig-cache-ttl"]            = String(o.cacheTtl);
-  if (o.cacheKey)                     h["cf-aig-cache-key"]            = o.cacheKey;
-  if (o.collectLog != null)           h["cf-aig-collect-log"]          = String(o.collectLog);
-  if (o.collectLogPayload != null)    h["cf-aig-collect-log-payload"]  = String(o.collectLogPayload);
-  if (o.requestTimeout != null)       h["cf-aig-request-timeout"]      = String(o.requestTimeout);
-  if (o.maxAttempts != null)          h["cf-aig-max-attempts"]         = String(o.maxAttempts);
-  if (o.retryDelay != null)           h["cf-aig-retry-delay"]          = String(o.retryDelay);
-  if (o.backoff)                      h["cf-aig-backoff"]              = o.backoff;
-
-  // Escape hatch: arbitrary extra headers, merged last so they can override anything above
-  Object.assign(h, o.extraHeaders ?? {});
-
-  return h;
+  // dynamic/<route>, or any other unrecognised format → compat endpoint
+  return { provider: "compat", endpoint: "chat/completions", isCompat: true };
 }
 
-// ── Core gateway call ────────────────────────────────────────────────────────
+// ── Core gateway call — uses AI binding, no API token needed ──────────────────
 
 export type GatewayResult =
   | { ok: true; data: GatewayResponse }
   | { ok: false; error: GatewayErrorResult };
 
 export async function callGateway(req: GatewayRequest, env: Env): Promise<GatewayResult> {
-  const gatewayId = env.GATEWAY_ID || "default";
-  // Compat endpoint — supports:
-  //   dynamic/<route-name>          (dynamic routing)
-  //   workers-ai/@cf/...            (Workers AI via gateway)
-  //   openai/gpt-4o-mini            (provider/model — Unified Billing or BYOK)
-  const url = `https://gateway.ai.cloudflare.com/v1/${env.CF_ACCOUNT_ID}/${gatewayId}/compat/chat/completions`;
+  const gatewayId = env.GATEWAY_ID || "ai-gateway01";
+  const gateway   = env.AI.gateway(gatewayId);
+  const o         = req.options ?? {};
 
+  const { provider, endpoint, isCompat } = parseModel(req.model);
+
+  // ── Request body ──────────────────────────────────────────────────────────
+  // Workers AI provider: { messages } or { prompt }
+  // Compat provider (dynamic routes): { model, messages, stream: false }
+  const query = isCompat
+    ? { model: req.model, messages: req.messages, stream: false }
+    : { messages: req.messages };
+
+  // ── Per-request cf-aig-* headers ─────────────────────────────────────────
+  // GatewayOptions covers most headers natively; only newer ones go here.
+  const reqHeaders: Record<string, string | number | boolean> = {};
+  if (o.collectLogPayload != null) {
+    // cf-aig-collect-log-payload (Mar 2026) — not yet in GatewayOptions type
+    reqHeaders["cf-aig-collect-log-payload"] = String(o.collectLogPayload);
+  }
+
+  // ── UniversalGatewayOptions (structured binding options) ─────────────────
+  const gatewayOpts: {
+    cacheKey?: string;
+    cacheTtl?: number;
+    skipCache?: boolean;
+    metadata?: Record<string, string | number | boolean>;
+    collectLog?: boolean;
+    requestTimeoutMs?: number;
+    retries?: {
+      maxAttempts?: 1 | 2 | 3 | 4 | 5;
+      retryDelayMs?: number;
+      backoff?: "constant" | "linear" | "exponential";
+    };
+  } = {};
+
+  if (o.skipCache)              gatewayOpts.skipCache       = true;
+  if (o.cacheTtl  != null)      gatewayOpts.cacheTtl        = o.cacheTtl;
+  if (o.cacheKey)               gatewayOpts.cacheKey        = o.cacheKey;
+  if (o.collectLog != null)     gatewayOpts.collectLog      = o.collectLog;
+  if (o.requestTimeout != null) gatewayOpts.requestTimeoutMs = o.requestTimeout;
+  if (req.metadata && Object.keys(req.metadata).length)
+    gatewayOpts.metadata = req.metadata as Record<string, string | number | boolean>;
+  if (o.maxAttempts != null || o.retryDelay != null || o.backoff) {
+    gatewayOpts.retries = {
+      ...(o.maxAttempts != null ? { maxAttempts: o.maxAttempts as 1 | 2 | 3 | 4 | 5 } : {}),
+      ...(o.retryDelay  != null ? { retryDelayMs: o.retryDelay } : {}),
+      ...(o.backoff               ? { backoff: o.backoff }        : {}),
+    };
+  }
+
+  // ── Extra headers (User-Agent, escape-hatch cf-aig-* headers) ────────────
+  const extraHeaders: Record<string, string> = {};
+  if (o.userAgent) extraHeaders["User-Agent"] = o.userAgent;
+  Object.assign(extraHeaders, o.extraHeaders ?? {});
+
+  // ── Call via AI binding — no Authorization token needed ───────────────────
   const start = Date.now();
   let raw: Response;
 
   try {
-    raw = await fetch(url, {
-      method: "POST",
-      headers: buildHeaders(req, env),
-      body: JSON.stringify({ model: req.model, messages: req.messages, stream: false }),
-    });
+    raw = await gateway.run(
+      { provider, endpoint, headers: reqHeaders, query },
+      {
+        gateway: Object.keys(gatewayOpts).length ? gatewayOpts : undefined,
+        extraHeaders: Object.keys(extraHeaders).length ? extraHeaders : undefined,
+      }
+    );
   } catch (e) {
     return { ok: false, error: { error: "network_error", status: 0, message: String(e) } };
   }
@@ -69,14 +107,17 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
     return { ok: false, error: { error: "gateway_error", status: raw.status, message: text } };
   }
 
+  // ── Parse response body ───────────────────────────────────────────────────
   const json = (await raw.json()) as Record<string, unknown>;
 
+  // Compat format: { choices: [{ message: { content: "…" } }] }
+  // Workers AI format: { response: "…" }
   const choices = json.choices as Array<{ message: { content: string } }> | undefined;
-  const message = choices?.[0]?.message?.content ?? "";
+  const message = choices
+    ? (choices[0]?.message?.content ?? "")
+    : ((json.response as string) ?? JSON.stringify(json));
 
-  const usageRaw = json.usage as
-    | { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
-    | undefined;
+  const usageRaw = json.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined;
   const usage = usageRaw
     ? {
         promptTokens:     usageRaw.prompt_tokens     ?? 0,
@@ -85,20 +126,20 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
       }
     : undefined;
 
-  // ── Extract all AI Gateway response headers ──────────────────────────
-  const logId       = raw.headers.get("cf-aig-log-id")       ?? "";
+  // ── Extract all AI Gateway response headers ───────────────────────────────
+  const logId       = raw.headers.get("cf-aig-log-id")       ?? env.AI.aiGatewayLogId ?? "";
   const cacheStatus = raw.headers.get("cf-aig-cache-status") ?? "UNKNOWN";
   const model       = raw.headers.get("cf-aig-model")        ?? req.model;
-  const provider    = raw.headers.get("cf-aig-provider")     ?? "";
+  const providerH   = raw.headers.get("cf-aig-provider")     ?? "";
   const step        = raw.headers.get("cf-aig-step")         ?? undefined;
-  const dlpHeader   = raw.headers.get("cf-aig-dlp");
-  const dlp         = dlpHeader ? (() => { try { return JSON.parse(dlpHeader); } catch { return dlpHeader; } })() : undefined;
+  const dlpRaw      = raw.headers.get("cf-aig-dlp");
+  const dlp = dlpRaw ? (() => { try { return JSON.parse(dlpRaw); } catch { return dlpRaw; } })() : undefined;
 
   return {
     ok: true,
     data: {
       message,
-      gateway: { logId, cacheStatus, model, provider, step, dlp, latencyMs, usage },
+      gateway: { logId, cacheStatus, model, provider: providerH, step, dlp, latencyMs, usage },
     },
   };
 }

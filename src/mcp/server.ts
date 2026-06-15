@@ -138,7 +138,7 @@ export class AigDemoMcp extends McpAgent<Env, Record<string, never>, Record<stri
       },
       async ({ logId }) => {
         try {
-          const gw = (this.env.AI as unknown as { gateway(id: string): { getLog(id: string): Promise<unknown> } }).gateway(this.env.GATEWAY_ID || "default");
+          const gw = this.env.AI.gateway(this.env.GATEWAY_ID || "ai-gateway01");
           const log = await gw.getLog(logId);
           return { content: [{ type: "text", text: JSON.stringify(log, null, 2) }] };
         } catch (e) {
@@ -158,7 +158,7 @@ export class AigDemoMcp extends McpAgent<Env, Record<string, never>, Record<stri
       },
       async ({ logId, feedback, score }) => {
         try {
-          const gw = (this.env.AI as unknown as { gateway(id: string): { patchLog(id: string, opts: { feedback?: number; score?: number }): Promise<void> } }).gateway(this.env.GATEWAY_ID || "default");
+          const gw = this.env.AI.gateway(this.env.GATEWAY_ID || "ai-gateway01");
           await gw.patchLog(logId, { feedback, ...(score != null ? { score } : {}) });
           return { content: [{ type: "text", text: `Feedback (${feedback > 0 ? "👍" : "👎"}${score != null ? `, score ${score}` : ""}) submitted for log \`${logId}\`` }] };
         } catch (e) {

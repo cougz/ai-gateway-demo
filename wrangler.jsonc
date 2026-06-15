@@ -4,7 +4,13 @@
   "compatibility_date": "2025-06-01",
   "compatibility_flags": ["nodejs_compat"],
 
-  // Workers AI binding — used for getLog / patchLog via env.AI.gateway()
+  // Non-secret config — baked into the bundle as env vars
+  "vars": {
+    "CF_ACCOUNT_ID": "9c0e55ad8906a05169a1259400c71e5b",
+    "GATEWAY_ID": "ai-gateway01"
+  },
+
+  // Workers AI binding — handles all gateway auth automatically (no API token needed)
   "ai": {
     "binding": "AI"
   },
@@ -26,9 +32,4 @@
       "new_sqlite_classes": ["AigDemoMcp"]
     }
   ]
-
-  // Secrets (set via: wrangler secret put <NAME>)
-  // CF_API_TOKEN  — Cloudflare API token (AI Gateway Read/Edit + Workers AI Read)
-  // CF_ACCOUNT_ID — Your Cloudflare account ID
-  // GATEWAY_ID    — AI Gateway name (defaults to "default" if not set)
 }

@@ -6,10 +6,7 @@ export async function handleGetLog(c: Context<{ Bindings: Env }>): Promise<Respo
   if (!logId) return c.json({ error: "missing log id" }, 400);
 
   try {
-    const gateway = (c.env.AI as unknown as { gateway(id: string): {
-      getLog(id: string): Promise<unknown>
-    } }).gateway(c.env.GATEWAY_ID || "default");
-
+    const gateway = c.env.AI.gateway(c.env.GATEWAY_ID || "ai-gateway01");
     const log = await gateway.getLog(logId);
     return c.json(log);
   } catch (e) {
