@@ -1058,7 +1058,7 @@ select{cursor:pointer}
     var modelChips = el('model-chips');
     var models = [
       ['Large \u2014 Llama 3.3 70B', 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast'],
-      ['Medium \u2014 Llama 3.1 8B', 'workers-ai/@cf/meta/llama-3.1-8b-instruct'],
+      ['Medium \u2014 Llama 3.1 8B FP8', 'workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8'],
       ['Small \u2014 Mistral 7B',    'workers-ai/@cf/mistral/mistral-7b-instruct-v0.1']
     ];
     for (var i = 0; i < models.length; i++) {
