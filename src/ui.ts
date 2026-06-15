@@ -568,7 +568,7 @@ select{cursor:pointer}
     if (xh) { opts.extraHeaders = xh; }
 
     return {
-      model: el('inp-model').value.trim() || 'workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      model: el('inp-model').value.trim(),
       messages: [{ role: 'user', content: userContent }],
       metadata: getMetadata(),
       options: opts
@@ -1001,7 +1001,8 @@ select{cursor:pointer}
       linesEl.appendChild(lineEl);
       scrollToBottom(msgs);
 
-      var body = buildRequest('Burst request ' + (i + 1) + ' of ' + count);
+      var chatText = el('chat-input').value.trim();
+      var body = buildRequest(chatText || 'Burst request ' + (i + 1) + ' of ' + count);
       var t0 = Date.now();
 
       fetch('/api/chat', {
