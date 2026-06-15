@@ -799,9 +799,16 @@ select{cursor:pointer}
       diagRows.push(['Tokens', gw.usage.promptTokens + ' \u2192 ' + gw.usage.completionTokens + ' = ' + gw.usage.totalTokens]);
     }
     if (gw.dlp) {
+      var dlpObj = (typeof gw.dlp === 'object' && gw.dlp !== null) ? gw.dlp : {};
+      var dlpAction = dlpObj.action || (typeof gw.dlp === 'string' ? gw.dlp : 'TRIGGERED');
       var dlpSpan = document.createElement('span');
-      dlpSpan.style.color = 'var(--error)';
-      dlpSpan.textContent = JSON.stringify(gw.dlp);
+      dlpSpan.className = 'info-tag';
+      if (dlpAction === 'BLOCK') {
+        dlpSpan.style.cssText = 'background:rgba(220,38,38,.12);color:var(--error);border:1px solid rgba(220,38,38,.25)';
+      } else {
+        dlpSpan.style.cssText = 'background:rgba(202,138,4,.12);color:var(--warn);border:1px solid rgba(202,138,4,.25)';
+      }
+      dlpSpan.textContent = dlpAction;
       diagRows.push(['DLP', dlpSpan]);
     }
     panel.appendChild(makeCard(diagRows));
@@ -915,7 +922,19 @@ select{cursor:pointer}
         console.log('[ui] response data', res.data);
         thinkEl.remove();
         if (res.status !== 200) {
-          appendError((res.data && (res.data.message || res.data.error)) || 'HTTP ' + res.status);
+          var d = res.data || {};
+          // Show DLP block prominently when the gateway blocked the request
+          if (d.error === 'dlp_blocked' || d.dlp) {
+            var dlpObj = (d.dlp && typeof d.dlp === 'object') ? d.dlp : {};
+            var action = dlpObj.action || 'BLOCKED';
+            appendError('DLP ' + action + ' — the gateway intercepted this request before it reached the model. Policy: ' + (dlpObj.policyId || dlpObj.policies || 'Source Code profile') + '. Check the AI Gateway logs for the full DLP event.');
+            // Still try to render partial gateway info if we have a log ID
+            if (d.logId) {
+              renderInfo({ logId: d.logId, cacheStatus: 'BYPASS', model: body.model, provider: '', latencyMs: 0, dlp: d.dlp });
+            }
+          } else {
+            appendError((d.message || d.error) || 'HTTP ' + res.status);
+          }
         } else {
           replaceThinkingWithResponse(thinkEl, res.data);
           if (res.data.gateway) { renderInfo(res.data.gateway); }

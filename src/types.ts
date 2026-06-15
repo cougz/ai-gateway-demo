@@ -55,6 +55,8 @@ export interface GatewayErrorResult {
   error: string;
   status: number;
   message: string;
+  dlp?: unknown;    // cf-aig-dlp from blocked/flagged responses
+  logId?: string;   // log ID even for error responses
 }
 
 export interface Scenario {

@@ -165,7 +165,22 @@ export async function callGateway(req: GatewayRequest, env: Env): Promise<Gatewa
 
   if (!raw.ok) {
     const text = await raw.text().catch(() => "");
-    return { ok: false, error: { error: "gateway_error", status: raw.status, message: text } };
+    // Capture cf-aig-dlp even on blocked/error responses so the UI can show
+    // the DLP action (especially useful for the Source Code BLOCK scenario)
+    const dlpHeader = raw.headers.get("cf-aig-dlp");
+    const dlpInfo   = dlpHeader ? (() => { try { return JSON.parse(dlpHeader); } catch { return dlpHeader; } })() : undefined;
+    const logId     = raw.headers.get("cf-aig-log-id") ?? "";
+    console.log("[gateway] error response", raw.status, "| dlp:", dlpHeader, "| logId:", logId.slice(0, 12));
+    return {
+      ok: false,
+      error: {
+        error: dlpInfo ? "dlp_blocked" : "gateway_error",
+        status: raw.status,
+        message: text,
+        dlp: dlpInfo,
+        logId,
+      } as GatewayErrorResult,
+    };
   }
 
   const json    = (await raw.json()) as Record<string, unknown>;

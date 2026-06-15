@@ -98,6 +98,59 @@ export const SCENARIOS: Scenario[] = [
   },
 
   // ════════════════════════════════════════════════════════════════════════════
+  // DATA LOSS PREVENTION (DLP)
+  // Profile 1 — Financial Information: FLAG, responses checked
+  // Profile 2 — Source Code:           BLOCK, requests checked
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ── DLP: Financial Information — FLAG on response ─────────────────────────
+  {
+    id: "dlp-financial-flag",
+    name: "DLP — Financial Info (Flag)",
+    description: "Response contains financial data → DLP flags it, request still succeeds",
+    explanation: "The 'Financial Information' DLP profile checks responses. The model is asked to produce financial records containing account numbers, credit card data and transaction amounts. The request goes through and you get a response, but the gateway sets `cf-aig-dlp: {action:'FLAG'}` in the headers — visible in the Gateway Info panel. Check the AI Gateway logs to see the flagged entry.",
+    request: {
+      model: WA_LARGE,
+      messages: [{
+        role: "user",
+        content: "Generate a fictional sample financial statement for 'Acme Corp Q3 2024'. Include: IBAN account numbers, a Visa credit card number, transaction amounts in USD, and quarterly revenue figures. Use realistic-looking but entirely fictional data.",
+      }],
+      metadata: { scenario: "dlp-test", dataClass: "financial", team: "security" },
+      options: { collectLog: true, collectLogPayload: true },
+    },
+  },
+
+  // ── DLP: Source Code — BLOCK on request ──────────────────────────────────
+  {
+    id: "dlp-source-code-block",
+    name: "DLP — Source Code (Block)",
+    description: "Request contains source code → DLP blocks it before reaching the model",
+    explanation: "The 'Source Code' DLP profile checks requests. The prompt below contains a JavaScript function with hardcoded API keys and credentials. The gateway intercepts and blocks the request before it ever reaches the model — you will see an error, not an AI response. The `cf-aig-dlp` header in the error response contains the BLOCK action and matched profile IDs.",
+    request: {
+      model: WA_LARGE,
+      messages: [{
+        role: "user",
+        content: `Please review this authentication function for security issues:
+
+function authenticate(username, password) {
+  const API_KEY = 'sk-prod-abc123xyz789secret';
+  const DB_PASSWORD = 'P@ssw0rd!SuperSecret2024';
+  return fetch('https://api.internal.example.com/auth', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + API_KEY,
+      'X-DB-Key': DB_PASSWORD
+    },
+    body: JSON.stringify({ user: username, pass: password })
+  });
+}`,
+      }],
+      metadata: { scenario: "dlp-test", dataClass: "source-code", team: "security" },
+      options: { collectLog: true, collectLogPayload: true },
+    },
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════
   // DIRECT WORKERS AI — gateway features demoed without dynamic routing
   // ════════════════════════════════════════════════════════════════════════════
 
