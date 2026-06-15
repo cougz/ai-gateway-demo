@@ -24,7 +24,7 @@ export const SCENARIOS: Scenario[] = [
     id: "plan-router-free",
     name: "Plan Router — Free Tier",
     description: "dynamic/plan-router · metadata.plan=free → rate-limited → Mistral 7B",
-    explanation: "The `plan-router` route checks `metadata.plan`. Free tenants hit a Rate Limit node (10 req/hr per tenantId) before reaching the small model. Watch `cf-aig-step` and `cf-aig-model` — then switch to the Paid variant to see both change.",
+    explanation: "The `plan-router` route checks `metadata.plan`. Free tenants hit a Rate Limit node (10 req/hr per tenantId) before reaching the small model. Watch the **Model** and **Step** fields in the Gateway Info panel — then switch to the Paid variant to see both change.",
     request: {
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
@@ -37,7 +37,7 @@ export const SCENARIOS: Scenario[] = [
     id: "plan-router-paid",
     name: "Plan Router — Paid Tier",
     description: "dynamic/plan-router · metadata.plan=paid → skips rate limit → Llama 70B",
-    explanation: "Same `plan-router` route, same endpoint, but `metadata.plan=paid` skips the rate limit node entirely and reaches the large model directly. Compare `cf-aig-step` with the Free variant — the route graph takes a completely different path.",
+    explanation: "Same `plan-router` route, same endpoint — only `metadata.plan` changes. Paid traffic skips the rate limit node and reaches the large model directly. Compare the **Model** and **Step** fields with the Free variant: the route graph takes a completely different path.",
     request: {
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
@@ -50,7 +50,7 @@ export const SCENARIOS: Scenario[] = [
     id: "env-router-staging",
     name: "Env Router — Staging",
     description: "dynamic/env-router · metadata.env=staging → Mistral 7B (cheap)",
-    explanation: "The `env-router` route reads `metadata.env`. Staging and dev traffic automatically lands on the small model — 90% cheaper, no code changes needed. Flip to the Production variant to see the model switch instantly.",
+    explanation: "The `env-router` route reads `metadata.env`. Staging traffic lands on the small model — 90% cheaper, no code changes needed. Switch to the Production variant and watch the **Model** field change instantly.",
     request: {
       model: DR_ENV,
       messages: [{ role: "user", content: "Write a one-line description for a function that validates email addresses." }],
@@ -63,7 +63,7 @@ export const SCENARIOS: Scenario[] = [
     id: "env-router-production",
     name: "Env Router — Production",
     description: "dynamic/env-router · metadata.env=production → Llama 70B (best quality)",
-    explanation: "Same `env-router` route, same code. `metadata.env=production` routes to the large model. The only difference between this and the Staging variant is a single metadata value — no deployments, no config changes.",
+    explanation: "Same `env-router` route, same code. `metadata.env=production` routes to the large model. Compare the **Model** and **Step** fields with the Staging variant — one metadata value, completely different routing outcome.",
     request: {
       model: DR_ENV,
       messages: [{ role: "user", content: "Write a one-line description for a function that validates email addresses." }],
@@ -76,7 +76,7 @@ export const SCENARIOS: Scenario[] = [
     id: "model-failover",
     name: "HA Chain — Model Failover",
     description: "dynamic/ha-chain · Llama 70B → Llama 8B → Mistral 7B on error/timeout",
-    explanation: "The `ha-chain` route sequences three models with a 5s timeout per node. If the primary errors or times out, the gateway automatically tries the next. `cf-aig-step` tells you which node answered. `requestTimeout: 2000` is set short here to make failover easier to trigger in a demo.",
+    explanation: "The `ha-chain` route sequences three Workers AI models with a 5s timeout per node. If the primary errors or times out, the gateway automatically tries the next. The **Step** field in Gateway Info shows which node answered. `requestTimeout: 2000` is deliberately short to make failover visible in a demo.",
     request: {
       model: DR_HA,
       messages: [{ role: "user", content: "Which model are you? Answer in one sentence." }],
@@ -89,7 +89,7 @@ export const SCENARIOS: Scenario[] = [
     id: "budget-degradation",
     name: "Cost-Aware — Budget Degradation",
     description: "dynamic/cost-aware · $0.50/day per userId — degrades to small model silently",
-    explanation: "The `cost-aware` route enforces a $0.50/day spend limit per `metadata.userId`. Under budget: Llama 70B. Over budget: Mistral 7B — no 429, no client error. `cf-aig-model` reveals which model served the request.",
+    explanation: "The `cost-aware` route enforces a $0.50/day spend limit per `metadata.userId`. Under budget: Llama 70B. Over budget: Mistral 7B — no 429, no error to the client. The **Model** field in Gateway Info reveals which model actually served the request.",
     request: {
       model: DR_COST,
       messages: [{ role: "user", content: "Explain the trade-offs between eventual consistency and strong consistency." }],

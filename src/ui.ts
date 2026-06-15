@@ -134,14 +134,14 @@ select{cursor:pointer}
 
 /* ── Gateway info ── */
 .info-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--subtle);padding:20px;text-align:center;font-size:12px}
-.info-card{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px}
-
-.info-row{display:grid;grid-template-columns:72px 1fr;gap:6px;font-size:12px;align-items:start}
-.info-k{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--subtle);font-family:var(--mono);padding-top:1px}
-.info-v{font-family:var(--mono);font-size:12px;color:var(--text);word-break:break-all}
-.info-click{cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:color .15s}
+.info-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+/* stacked layout: label above value — more readable than 2-col grid */
+.info-row{display:flex;flex-direction:column;gap:3px}
+.info-k{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--subtle);font-family:var(--mono)}
+.info-v{font-family:var(--mono);font-size:13px;color:var(--text);overflow-wrap:anywhere;line-height:1.4}
+.info-click{cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:color .15s}
 .info-click:hover{color:var(--orange)}
-.info-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:700;font-family:var(--mono)}
+.info-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:700;font-family:var(--mono)}
 .copied{font-size:10px;color:var(--success);font-family:var(--mono)}
 
 /* ── Feedback ── */
