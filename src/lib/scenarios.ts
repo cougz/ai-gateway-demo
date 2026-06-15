@@ -55,7 +55,7 @@ export const SCENARIOS: Scenario[] = [
     explanation: "The gateway caches the response for 5 minutes. Send this request once — you will see **Cache: MISS** and tokens consumed. Then press **↑** in the chat input to recall the exact same message and send it again — the response is served from cache in under 50ms with **Cache: HIT** and zero tokens used. The cache key is derived from the model and message content.",
     request: {
       model: WA_LARGE,
-      messages: [{ role: "user", content: "What are the three main benefits of using Cloudflare AI Gateway for production AI applications?" }],
+      messages: [{ role: "user", content: "What is 17 multiplied by 38? Show your working." }],
       options: { cacheTtl: 300 },
     },
   },
