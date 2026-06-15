@@ -2,8 +2,6 @@ import type { Scenario } from "../types";
 
 // ── Workers AI model strings ──────────────────────────────────────────────────
 // No external provider keys required — billed through the Cloudflare account.
-export const WA_LARGE  = "workers-ai/@cf/meta/llama-3.1-70b-instruct";
-export const WA_MEDIUM = "workers-ai/@cf/meta/llama-3.1-8b-instruct";
 export const WA_SMALL  = "workers-ai/@cf/mistral/mistral-7b-instruct-v0.1";
 
 // ── Dynamic route names (configured in AI Gateway dashboard) ─────────────────
