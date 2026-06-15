@@ -19,8 +19,8 @@ export const SCENARIOS: Scenario[] = [
   {
     id: "plan-router-free",
     name: "Plan Router — Free Tier",
-    description: "dynamic/plan-router · metadata.plan=free → Llama 3.1 8B (OpenRouter)",
-    explanation: "The `plan-router` route evaluates `metadata.plan`. Free traffic is routed by the gateway to Llama 3.1 8B via OpenRouter. Watch the **Model** and **Provider** fields in the Gateway Info panel — then switch to the Paid variant to see both change. The routing decision lives entirely in the gateway: no code change needed to switch models.",
+    description: "dynamic/plan-router · metadata.plan=free → rate limit (3/min) → Llama 3.1 8B",
+    explanation: "The `plan-router` route evaluates `metadata.plan`. Free traffic passes through a **Rate Limit node** (3 req/min per `tenantId`) before reaching Llama 3.1 8B via OpenRouter. **To trigger the limit:** run this scenario 4 times quickly — the 4th request is blocked by the gateway before it reaches the model. Switch to the Paid variant to see the rate limit disappear and the model change.",
     request: {
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
