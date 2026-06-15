@@ -433,6 +433,9 @@ select{cursor:pointer}
   var currentLogId = null;
   var fbChoice = null;
   var isLoading = false;
+  var msgHistory = [];   // sent messages, newest first
+  var historyIdx = -1;   // -1 = current draft
+  var historyDraft = ''; // saved draft while browsing history
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function esc(s) {
@@ -908,6 +911,9 @@ select{cursor:pointer}
     if (!text) { console.log('[ui] empty message, ignoring'); return; }
 
     isLoading = true;
+    if (msgHistory[0] !== text) { msgHistory.unshift(text); }  // dedupe consecutive
+    historyIdx = -1;
+    historyDraft = '';
     inp.value = '';
     autoResize(inp);
     el('send-btn').disabled = true;
@@ -1172,7 +1178,28 @@ select{cursor:pointer}
     // Send button & keyboard shortcut
     el('send-btn').onclick = sendMessage;
     el('chat-input').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); return; }
+
+      var inp = this;
+      if (e.key === 'ArrowUp' && inp.selectionStart === 0 && msgHistory.length > 0) {
+        e.preventDefault();
+        if (historyIdx === -1) { historyDraft = inp.value; }
+        historyIdx = Math.min(historyIdx + 1, msgHistory.length - 1);
+        inp.value = msgHistory[historyIdx];
+        inp.style.height = '';
+        inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+        inp.setSelectionRange(0, 0);
+        return;
+      }
+      if (e.key === 'ArrowDown' && historyIdx >= 0) {
+        e.preventDefault();
+        historyIdx--;
+        inp.value = historyIdx >= 0 ? msgHistory[historyIdx] : historyDraft;
+        inp.style.height = '';
+        inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+        var end = inp.value.length;
+        inp.setSelectionRange(end, end);
+      }
     });
     el('chat-input').addEventListener('input', function () { autoResize(this); });
 
