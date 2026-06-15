@@ -43,32 +43,27 @@ export const SCENARIOS: Scenario[] = [
     },
   },
 
-  // ── DLP: Source Code — BLOCK on request ──────────────────────────────────
+  // ── DLP: PII Record — BLOCK on request and response ─────────────────────
   {
-    id: "dlp-source-code-block",
-    name: "DLP — Source Code (Block)",
-    description: "Request contains source code → DLP blocks it before reaching the model",
-    explanation: "The 'Source Code' DLP profile checks requests. The prompt below contains a JavaScript function with hardcoded API keys and credentials. The gateway intercepts and blocks the request before it ever reaches the model — you will see an error, not an AI response. The `cf-aig-dlp` header in the error response contains the BLOCK action and matched profile IDs.",
+    id: "dlp-pii-block",
+    name: "DLP — PII Record (Block)",
+    description: "Request contains PII (3+ fields) → DLP blocks it before reaching the model",
+    explanation: "The 'Personally Identifiable Information (PII) Record' profile triggers when **3 or more** unique PII fields appear in close proximity. This request contains Full Name, Email, US Phone, SSN, and Mailing Address — well above the threshold. The gateway blocks on both **Request** and **Response**, so the prompt never reaches the model. The `cf-aig-dlp` header in the error response confirms the BLOCK action.",
     request: {
       model: WA_LARGE,
       messages: [{
         role: "user",
-        content: `Please review this authentication function for security issues:
+        content: `Please review and summarise this customer record for our CRM:
 
-function authenticate(username, password) {
-  const API_KEY = 'sk-prod-abc123xyz789secret';
-  const DB_PASSWORD = 'P@ssw0rd!SuperSecret2024';
-  return fetch('https://api.internal.example.com/auth', {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + API_KEY,
-      'X-DB-Key': DB_PASSWORD
-    },
-    body: JSON.stringify({ user: username, pass: password })
-  });
-}`,
+Name: Sarah Johnson
+Email: sarah.johnson@acme-corp.com
+Phone: +1 (415) 555-0192
+SSN: 578-34-9201
+Address: 847 Pacific Avenue, San Francisco, CA 94133
+
+Is there anything unusual about this account?`,
       }],
-      metadata: { scenario: "dlp-test", dataClass: "source-code", team: "security" },
+      metadata: { scenario: "dlp-test", dataClass: "pii", team: "security" },
       options: { collectLog: true, collectLogPayload: true, skipCache: true },
     },
   },
