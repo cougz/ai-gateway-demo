@@ -18,7 +18,7 @@ export const SCENARIOS: Scenario[] = [
     id: "plan-router-free",
     name: "Plan Router — Free Tier",
     description: "dynamic/plan-router · metadata.plan=free → rate-limited → Mistral 7B",
-    explanation: "The `plan-router` route checks `metadata.plan`. Free tenants hit a Rate Limit node (10 req/hr per tenantId) before reaching the small model. Watch the **Model** and **Step** fields in the Gateway Info panel — then switch to the Paid variant to see both change.",
+    explanation: "The `plan-router` route checks `metadata.plan`. Free tenants hit a Rate Limit node (3 req/min per tenantId) before reaching Mistral 7B. **To trigger the rate limit:** run this scenario 4 times in quick succession — the 4th request hits the fallback path and returns an error instead of a model response. Note: **Step is always 0** for both tiers because the counter only increments when multiple *model nodes* are attempted in one request (failover), not for control-flow nodes like rate limits.",
     request: {
       model: DR_PLAN,
       messages: [{ role: "user", content: "Summarise what Cloudflare AI Gateway does in one sentence." }],
